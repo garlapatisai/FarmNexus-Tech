@@ -1,0 +1,22 @@
+{
+  "name": "farmnexus-tech",
+  "private": true,
+  "version": "1.0.0",
+  "description": "FarmNexus Tech — frontend (Vite/React) + backend (Express)",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently -n frontend,backend -c blue,magenta \"npm run dev -w frontend\" \"npm run dev -w backend\"",
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build": "npm run build -w frontend",
+    "start": "npm run start -w backend",
+    "start:frontend": "npm run preview -w frontend",
+    "lint": "npm run lint -w frontend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
