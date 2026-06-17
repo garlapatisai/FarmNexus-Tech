@@ -1,73 +1,71 @@
-# React + TypeScript + Vite
+# 🌾 FarmNexus Tech
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**FarmNexus Tech** is a peer-to-peer digital marketplace that connects Indian farmers directly with buyers. By providing real-time listing tools, secure digital escrow payments, live order-based chat, and Google Gemini AI insights, FarmNexus empowers farmers to sell their produce at fair market prices while enabling buyers to access fresh, high-quality crop yields directly from the source.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 💡 How It Works
 
-## React Compiler
+### 1. The Farmer's Journey
+- **List Produce:**
+- Farmers create detailed listings for their crops (specifying the category, quantity, availability date, and location) and upload photos.
+- **Get AI Price Suggestions:**
+- Farmers can request price recommendations from the built-in Gemini AI assistant to list their crops at fair Indian wholesale mandi rates.
+- **Monitor Analytics & Demand:**
+-  Farmers view interactive charts showing their sales distribution and revenue metrics, along with predicted regional crop demand forecasts.
+- **Interact with AI Farm Assistant:**
+- Farmers can chat with an agricultural assistant chatbot for advice on crop health, soil quality, storage, and weather.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 2. The Buyer's Journey
+- **Browse & Search:**
+- Buyers explore live crop listings on an interactive map or grid.
+- **Use Smart AI Search:**
+- Instead of standard filters, buyers can search using natural language (e.g., *"fresh mangoes under 100 per kg in Guntur"*). The system uses Gemini AI to parse the request and filter listings automatically.
+- **Secure Purchases:**
+- Buyers add items to their cart and checkout using the Razorpay payment gateway.
+- **Track Orders & Rate:**
+- Buyers check order history, rate the farmers, and coordinate delivery.
 
-## Expanding the ESLint configuration
+### 3. Order Coordination & Escrow Payments
+- **Direct Messaging:**
+-  Once an order is placed, a dedicated chat channel opens between the farmer and buyer to coordinate pickup or shipping.
+- **Cryptographic Signature Verification:**
+- The system verifies transaction authenticity securely to ensure reliable order verification.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+---
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## ✨ Core Features
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### 👨‍🌾 Farmer Dashboard
+- **Produce Listings:**    Manage crop category, pricing, available quantities, geographic location, and photos.
+- **Dynamic Analytics:**    Visualize overall revenue, monthly trends, and product distribution charts.
+- **Regional Demand Forecasting:** Fetch state-wise crop demand predictions.
+- **Interactive Farm Assistant:** Consult a customized AI assistant for storage, crop protection, and cultivation tips.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+### 🛍️ Buyer Platform
+- **Visual Map Search:** Look up listings by distance and proximity on an interactive map.
+- **Natural Language Search Parser:** Instantly translates unstructured query inputs into exact category, price, and keyword parameters.
+- **Direct Checkout:** Quick online payments integrated with Razorpay.
+- **Order-scoped Chat:** Instant direct messaging with the seller for order details.
+
+---
+
+## 🏗️ Architecture & Tech Stack
+
+The platform is built on a modern, modular architecture:
+
+- **Frontend:** React, TypeScript, Vite, Tailwind CSS, Zustand, Leaflet maps, and Recharts.
+- **Backend:** Node.js, Express, and the Razorpay Node SDK.
+- **Database & Realtime Services:** Supabase (PostgreSQL), utilizing Row-Level Security (RLS) and real-time database subscription channels for messaging.
+- **Artificial Intelligence:** Google Gemini AI integration (specifically using the `gemini-2.5-flash` model REST API).
+
+---
+
+## 🚀 How to Run
+
+To run the application locally, run the following command in the project root directory:
+
+```bash
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
