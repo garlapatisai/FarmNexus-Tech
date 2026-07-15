@@ -9,20 +9,30 @@
 ## 💡 How It Works
 
 ### 1. The Farmer's Journey
-- **List Produce:** Farmers create detailed listings for their crops (specifying the category, quantity, availability date, and location) and upload photos.
-- **Get AI Price Suggestions:** Farmers can request price recommendations from the built-in Gemini AI assistant to list their crops at fair Indian wholesale mandi rates.
-- **Monitor Analytics & Demand:** Farmers view interactive charts showing their sales distribution and revenue metrics, along with predicted regional crop demand forecasts.
-- **Interact with AI Farm Assistant:** Farmers can chat with an agricultural assistant chatbot for advice on crop health, soil quality, storage, and weather.
+- **List Produce:**
+  - Farmers create detailed listings for their crops (specifying the category, quantity, availability date, and location) and upload photos.
+- **Get AI Price Suggestions:**
+  - Farmers can request price recommendations from the built-in Gemini AI assistant to list their crops at fair Indian wholesale mandi rates.
+- **Monitor Analytics & Demand:**
+  - Farmers view interactive charts showing their sales distribution and revenue metrics, along with predicted regional crop demand forecasts.
+- **Interact with AI Farm Assistant:**
+  - Farmers can chat with an agricultural assistant chatbot for advice on crop health, soil quality, storage, and weather.
 
 ### 2. The Buyer's Journey
-- **Browse & Search:** Buyers explore live crop listings on an interactive map or grid.
-- **Use Smart AI Search:** Instead of standard filters, buyers can search using natural language (e.g., *"fresh mangoes under 100 per kg in Guntur"*). The system uses Gemini AI to parse the request and filter listings automatically.
-- **Secure Purchases:** Buyers add items to their cart and checkout using the Razorpay payment gateway.
-- **Track Orders & Rate:** Buyers check order history, rate the farmers, and coordinate delivery.
+- **Browse & Search:**
+  - Buyers explore live crop listings on an interactive map or grid.
+- **Use Smart AI Search:**
+  - Instead of standard filters, buyers can search using natural language (e.g., *"fresh mangoes under 100 per kg in Guntur"*). The system uses Gemini AI to parse the request and filter listings automatically.
+- **Secure Purchases:**
+  - Buyers add items to their cart and checkout using the Razorpay payment gateway.
+- **Track Orders & Rate:**
+  - Buyers check order history, rate the farmers, and coordinate delivery.
 
 ### 3. Order Coordination & Escrow Payments
-- **Direct Messaging:** Once an order is placed, a dedicated chat channel opens between the farmer and buyer to coordinate pickup or shipping.
-- **Cryptographic Signature Verification:** The system verifies transaction authenticity securely to ensure reliable order verification.
+- **Direct Messaging:**
+  - Once an order is placed, a dedicated chat channel opens between the farmer and buyer to coordinate pickup or shipping.
+- **Cryptographic Signature Verification:**
+  - The system verifies transaction authenticity securely to ensure reliable order verification.
 
 ---
 
@@ -60,4 +70,3 @@ To run the application locally, run the following command in the project root di
 ```bash
 npm run dev
 ```
-
