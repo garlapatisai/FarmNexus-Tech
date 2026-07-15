@@ -277,3 +277,165 @@ Provide wholesale prices in ₹/kg based on typical current Indian rates.`
   }
 }
 
+// ── Feature 6 — Crop Protection Image Analysis ─────────────────────────────
+
+/**
+ * Analyze a crop image (as base64) to detect diseases and suggest treatment.
+ * Uses Gemini's multimodal capability with inline image data.
+ */
+export async function analyzeCropImage(
+  base64Image: string,
+  mimeType: string,
+  cropName?: string,
+): Promise<string> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY is not set.')
+  }
+
+  const systemInstruction = `You are an expert agricultural pathologist and crop disease specialist for Indian farming.
+Analyze the uploaded crop/plant image and provide:
+1. **Identified Issue**: Name the disease, pest, or deficiency visible (or say "Healthy" if the crop looks fine).
+2. **Severity**: Low / Medium / High
+3. **Cause**: Brief explanation of what's causing this.
+4. **Treatment**: 2-3 practical remedies (organic + chemical options).
+5. **Prevention**: 2 tips to prevent this in the future.
+Keep your response concise, practical, and in simple English. Use emojis for readability.`
+
+  const contents = [
+    {
+      role: 'user' as const,
+      parts: [
+        {
+          inlineData: {
+            mimeType,
+            data: base64Image,
+          },
+        },
+        {
+          text: cropName
+            ? `Analyze this image of my ${cropName} crop. What disease or issue do you see? Provide treatment suggestions.`
+            : `Analyze this crop/plant image. Identify any diseases, pests, or issues and suggest treatments.`,
+        },
+      ],
+    },
+  ]
+
+  const body: Record<string, unknown> = {
+    contents,
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+  }
+
+  const res = await fetch(`${BASE_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(
+      (err as { error?: { message?: string } })?.error?.message ??
+        `Gemini API error ${res.status}`,
+    )
+  }
+
+  const data = await res.json()
+  return (data?.candidates?.[0]?.content?.parts?.[0]?.text ?? 'Unable to analyze image.').trim()
+}
+
+// ── Feature 7 — Water Management Advice ──────────────────────────────────────
+
+/**
+ * Get personalized water management advice based on crop, area, and region.
+ */
+export async function getWaterManagementAdvice(
+  cropName: string,
+  areaAcres: number,
+  region: string,
+  irrigationType?: string,
+): Promise<string> {
+  const systemInstruction = `You are an expert agricultural water management advisor for Indian farming.
+Provide practical, actionable water management advice tailored to the farmer's specific inputs.
+Structure your response with these sections:
+1. 💧 **Water Requirement**: Estimated daily/weekly water needs for this crop
+2. 🗓️ **Irrigation Schedule**: Optimal watering frequency and timing
+3. 💡 **Efficiency Tips**: 3-4 water saving techniques specific to their setup
+4. ⚠️ **Common Mistakes**: 2 mistakes to avoid
+5. 🌧️ **Monsoon Tips**: Seasonal water management advice
+Keep responses concise and use simple English. Use emojis for readability.`
+
+  const prompt = `Crop: ${cropName}
+Farm Area: ${areaAcres} acres
+Region: ${region}, India
+Irrigation Type: ${irrigationType || 'Not specified'}
+Provide personalized water management advice.`
+
+  return callGemini(
+    [{ role: 'user', parts: [{ text: prompt }] }],
+    systemInstruction,
+  )
+}
+
+// ── Feature 8 — Productivity & Yield Improvement ─────────────────────────────
+
+/**
+ * Get AI-powered productivity improvement suggestions.
+ */
+export async function getProductivityAdvice(
+  cropName: string,
+  currentYield: string,
+  soilType: string,
+  region: string,
+): Promise<string> {
+  const systemInstruction = `You are an expert agricultural productivity consultant for Indian farming.
+Provide practical, data-driven advice to help increase crop yields.
+Structure your response with:
+1. 📊 **Current Assessment**: Brief evaluation based on their inputs
+2. 🌾 **Yield Improvement**: 3-4 specific techniques to boost yield
+3. 🧪 **Soil & Nutrients**: Fertilizer and soil management recommendations
+4. 📅 **Best Practices**: Optimal planting times and crop rotation advice
+5. 💰 **Market Tips**: How to maximize revenue from higher yields
+Keep responses practical and tailored to Indian conditions. Use emojis.`
+
+  const prompt = `Crop: ${cropName}
+Current Yield: ${currentYield}
+Soil Type: ${soilType}
+Region: ${region}, India
+How can I improve my crop yield and productivity?`
+
+  return callGemini(
+    [{ role: 'user', parts: [{ text: prompt }] }],
+    systemInstruction,
+  )
+}
+
+// ── Feature 9 — Crop Protection Text Advice ──────────────────────────────────
+
+/**
+ * Get crop protection advice based on symptoms described by farmer.
+ */
+export async function getCropProtectionAdvice(
+  cropName: string,
+  symptoms: string,
+  region: string,
+): Promise<string> {
+  const systemInstruction = `You are an expert plant pathologist and crop protection specialist for Indian farming.
+Based on the described symptoms, provide:
+1. 🔍 **Likely Diagnosis**: Most probable disease/pest (top 2 possibilities)
+2. ⚡ **Severity Level**: Low / Medium / High
+3. 💊 **Immediate Treatment**: Steps to take right now (organic + chemical)
+4. 🛡️ **Prevention Plan**: How to prevent this in the future
+5. 📞 **When to Get Help**: Signs that indicate professional consultation is needed
+Keep responses practical and in simple English. Use emojis for readability.`
+
+  const prompt = `Crop: ${cropName}
+Symptoms: ${symptoms}
+Region: ${region}, India
+What's wrong with my crop and how do I fix it?`
+
+  return callGemini(
+    [{ role: 'user', parts: [{ text: prompt }] }],
+    systemInstruction,
+  )
+}
+

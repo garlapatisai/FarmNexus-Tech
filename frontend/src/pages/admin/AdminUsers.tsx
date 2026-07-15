@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase'
+import { useAuthStore } from '../../store/authStore'
+import { localUsersRef } from '../../lib/localDb'
 
 type ProfileRow = {
   id: string
@@ -20,11 +22,22 @@ export function AdminUsers() {
   const [total, setTotal] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const isLocal = useAuthStore((s) => s.isLocal)
 
   const load = useCallback(async () => {
     setLoading(true)
     const from = page * PAGE
     const to = from + PAGE - 1
+
+    if (isLocal || !isSupabaseConfigured()) {
+      const allUsers = Object.values(localUsersRef).sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))
+      setRows(allUsers.slice(from, to + 1) as ProfileRow[])
+      setTotal(allUsers.length)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     const { data, error: e, count } = await supabase
       .from('profiles')
       .select('id, name, phone, role, district, is_suspended, created_at', { count: 'exact' })
@@ -39,13 +52,21 @@ export function AdminUsers() {
     setError(null)
     setRows((data as ProfileRow[]) ?? [])
     setTotal(count ?? 0)
-  }, [page])
+  }, [page, isLocal])
 
   useEffect(() => {
     void load()
   }, [load])
 
   async function toggleSuspend(id: string, next: boolean) {
+    if (isLocal || !isSupabaseConfigured()) {
+      if (localUsersRef[id]) {
+        localUsersRef[id] = { ...localUsersRef[id], is_suspended: next }
+      }
+      void load()
+      return
+    }
+
     const { error: e } = await supabase.from('profiles').update({ is_suspended: next }).eq('id', id)
     if (e) {
       alert(e.message)

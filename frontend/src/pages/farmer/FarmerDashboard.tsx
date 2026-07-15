@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
+import { localListingsRef, localOrdersRef, localUsersRef } from '../../lib/localDb'
 import { chatWithFarmAssistant, type GeminiMessage, getRegionalDemandTrends, type DemandTrend, getTopCropsPredictions, type TopCropPrediction } from '../../services/gemini'
 
 type DashboardMetrics = {
@@ -41,9 +42,15 @@ function formatINR(n: number) {
 
 export function FarmerDashboard() {
   const user = useAuthStore((s) => s.user)
+  const isLocal = useAuthStore((s) => s.isLocal)
   const [metrics, setMetrics] = useState<DashboardMetrics>(mockMetrics)
   const [recent, setRecent] = useState<OrderRow[]>(mockRecentOrders)
   const [usingMock, setUsingMock] = useState(true)
+
+  const [globalActiveListings, setGlobalActiveListings] = useState(120)
+  const [globalRegisteredFarmers, setGlobalRegisteredFarmers] = useState(450)
+  const [globalOrdersCompleted, setGlobalOrdersCompleted] = useState(1200)
+  const [globalSatisfactionRate] = useState(4.8)
   const [trends, setTrends] = useState<DemandTrend[]>([
     { region: 'Andhra Pradesh', crop: 'Rice', demand: 92, color: '#2E7D32' },
     { region: 'Maharashtra', crop: 'Mangoes', demand: 85, color: '#F57C00' },
@@ -95,6 +102,7 @@ export function FarmerDashboard() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const chatMountedRef = useRef(false)
 
   async function sendChatMessage() {
     const text = chatInput.trim()
@@ -111,13 +119,31 @@ export function FarmerDashboard() {
       const reply = await chatWithFarmAssistant(geminiHistory)
       setChatMessages((prev) => [...prev, { role: 'model', text: reply }])
     } catch (e) {
-      setChatMessages((prev) => [...prev, { role: 'model', text: `⚠️ Sorry, I couldn't connect right now. Please try again.` }])
+      console.warn("Gemini API error. Falling back to local offline chat responder:", e);
+      const query = text.toLowerCase();
+      let response = "🌾 FarmNexusTECH Offline Advice: That's an interesting question. I recommend checking current mandi wholesale rates or contacting local distribution partners directly for exact details.";
+      
+      if (query.includes('price') || query.includes('mandi') || query.includes('cost') || query.includes('rate')) {
+        response = "🌾 FarmNexusTECH Offline Advice: Mandi wholesale prices for staple crops like paddy and wheat are holding stable. Fresh vegetables are experiencing a seasonal 5-10% upward trend due to monsoon supply logistics.";
+      } else if (query.includes('water') || query.includes('irrigation') || query.includes('rain') || query.includes('wet')) {
+        response = "🌾 FarmNexusTECH Offline Advice: For optimized irrigation, check soil moisture weekly. Drip irrigation is highly recommended to conserve up to 40% water while maintaining optimal root zone hydration.";
+      } else if (query.includes('seed') || query.includes('fertilizer') || query.includes('crop') || query.includes('grow')) {
+        response = "🌾 FarmNexusTECH Offline Advice: Ensure you use certified high-yield seeds from verified mandis. For organic farming, compost and neem cake powder offer natural pest protection and enrich nitrogen levels.";
+      } else if (query.includes('buyer') || query.includes('sell') || query.includes('market') || query.includes('order')) {
+        response = "🌾 FarmNexusTECH Offline Advice: Set up structured crop listings with clear pricing in the marketplace. Commercial buyers look for details on grain moisture, crop size, and available volume.";
+      }
+      
+      setChatMessages((prev) => [...prev, { role: 'model', text: response }])
     } finally {
       setChatLoading(false)
     }
   }
 
   useEffect(() => {
+    if (!chatMountedRef.current) {
+      chatMountedRef.current = true
+      return
+    }
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [chatMessages, chatLoading])
 
@@ -128,7 +154,74 @@ export function FarmerDashboard() {
     let cancelled = false
     async function load() {
       try {
-        const [listRes, ordersRes, earningsRes, monthRes] = await Promise.all([
+        if (isLocal) {
+          const localOrders = Object.values(localOrdersRef).filter((o: any) => o.farmer_id === farmerId)
+          const allLocalOrders = Object.values(localOrdersRef)
+          const localListings = Object.values(localListingsRef)
+
+          const totalEarnings = localOrders
+            .filter((o: any) => o.status === 'delivered' || o.payment_status === 'paid')
+            .reduce((sum: number, o: any) => sum + Number(o.total_amount ?? 0), 0)
+
+          const pendingOrders = localOrders
+            .filter((o: any) => o.status === 'pending' || o.status === 'placed' || o.status === 'accepted')
+            .length
+
+          const activeListings = localListings
+            .filter((l: any) => l.farmer_id === farmerId && l.is_active)
+            .length
+
+          const monthOrders = localOrders
+            .filter((o: any) => o.created_at && o.created_at.startsWith(new Date().toISOString().substring(0, 7)))
+            .length
+
+          if (!cancelled) {
+            setMetrics({
+              totalEarnings,
+              pendingOrders,
+              activeListings,
+              monthOrders
+            })
+
+            // Calculate global stats dynamically based on local storage
+            const actList = localListings.filter((l: any) => l.is_active && Number(l.quantity_kg) > 0).length
+            const regFarm = Object.values(localUsersRef).filter((u: any) => u.role === 'farmer').length
+            const ordComp = allLocalOrders.filter((o: any) => o.status === 'delivered').length
+
+            setGlobalActiveListings(actList)
+            setGlobalRegisteredFarmers(regFarm)
+            setGlobalOrdersCompleted(ordComp)
+
+            // Recent orders
+            const recentRows = localOrders
+              .sort((a: any, b: any) => (b.created_at || '').localeCompare(a.created_at || ''))
+              .slice(0, 5)
+
+            setRecent(
+              recentRows.map((r: any) => ({
+                id: String(r.id),
+                produce_name: localListingsRef[r.listing_id]?.produce_name ?? 'Local Produce',
+                buyer_name: localUsersRef[r.buyer_id]?.name ?? 'Buyer',
+                quantity_kg: Number(r.quantity_kg),
+                total_amount: Number(r.total_amount),
+                status: String(r.status),
+              }))
+            )
+            setUsingMock(false)
+          }
+          return
+        }
+
+        // Supabase mode
+        const [
+          listRes, 
+          ordersRes, 
+          earningsRes, 
+          monthRes,
+          globalListingsRes,
+          globalFarmersRes,
+          globalOrdersRes
+        ] = await Promise.all([
           supabase.from('listings').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerId).eq('is_active', true),
           supabase.from('orders').select('id', { count: 'exact', head: true }).eq('farmer_id', farmerId).in('status', ['placed']),
           supabase
@@ -142,6 +235,9 @@ export function FarmerDashboard() {
             .select('id', { count: 'exact', head: true })
             .eq('farmer_id', farmerId)
             .gte('created_at', new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString()),
+          supabase.from('listings').select('id', { count: 'exact', head: true }).eq('is_active', true),
+          supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'farmer'),
+          supabase.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'delivered')
         ])
 
         if (cancelled || listRes.error || ordersRes.error || earningsRes.error || monthRes.error) {
@@ -167,6 +263,15 @@ export function FarmerDashboard() {
           activeListings: listRes.count ?? 0,
           monthOrders: monthRes.count ?? 0,
         })
+
+        // Global stats from Supabase
+        const actList = globalListingsRes.count ?? 0
+        const regFarm = globalFarmersRes.count ?? 0
+        const ordComp = globalOrdersRes.count ?? 0
+
+        setGlobalActiveListings(actList)
+        setGlobalRegisteredFarmers(regFarm)
+        setGlobalOrdersCompleted(ordComp)
         setUsingMock(false)
 
         if (!recentErr && recentRows && recentRows.length > 0) {
@@ -198,10 +303,10 @@ export function FarmerDashboard() {
     return () => {
       cancelled = true
     }
-  }, [farmerId])
+  }, [farmerId, isLocal])
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] font-sans pb-16">
+    <div className="min-h-screen bg-light font-sans pb-16">
 
       {/* Hero Header mimicking the mockup */}
       <div className="relative mx-auto mt-6 max-w-7xl px-4 lg:px-8">
@@ -245,25 +350,25 @@ export function FarmerDashboard() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard 
             label="Active Listings" 
-            value={String(metrics.activeListings)} 
+            value={String(globalActiveListings)} 
             gradient="from-[#2E7D32] to-[#14532D]" 
             icon="📊" 
           />
           <MetricCard 
             label="Registered Farmers" 
-            value={String(metrics.monthOrders || 450)} 
+            value={String(globalRegisteredFarmers)} 
             gradient="from-[#F57C00] to-[#E65100]" 
             icon="🍃" 
           />
           <MetricCard 
             label="Orders Completed" 
-            value={`${(metrics.pendingOrders / 1000).toFixed(1)}K`} 
+            value={globalOrdersCompleted >= 1000 ? `${(globalOrdersCompleted / 1000).toFixed(1)}K` : String(globalOrdersCompleted)} 
             gradient="from-[#1F8A70] to-[#0D5C46]" 
             icon="📦" 
           />
           <MetricCard 
             label="Satisfaction Rate" 
-            value={"4.8"} 
+            value={globalSatisfactionRate.toFixed(1)} 
             gradient="from-[#333F4D] to-[#1E293B]" 
             icon="⭐⭐⭐⭐" 
             highlight="⭐"
@@ -372,7 +477,7 @@ export function FarmerDashboard() {
                     <p className="text-[10px] text-emerald-500 font-medium">● Online</p>
                   </div>
                 </div>
-                <span className="text-[10px] font-semibold text-neutral-400 bg-gradient-to-r from-violet-100 to-indigo-100 px-2 py-1 rounded-full">✨ Powered by Gemini</span>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">🌾 FarmNexusTECH</span>
              </div>
 
              {/* Message thread */}

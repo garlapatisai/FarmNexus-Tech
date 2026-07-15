@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import 'tailwindcss';
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-primary: #2E7D32;
   --color-accent: #F57C00;
@@ -9,6 +11,26 @@
   --color-teal: #1F8A70;
   --font-sans: 'Inter', system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
 }
+
+@layer theme {
+  .dark {
+    /* Override colors for dark mode */
+    --color-light: #162419;
+    --color-dark: #cbd9cf;
+    --color-white: #121c13;
+    --color-neutral-50: #0a110a;
+    --color-neutral-100: #1b2a1e;
+    --color-neutral-200: #253829;
+    --color-neutral-300: #364d3b;
+    --color-neutral-400: #546d5a;
+    --color-neutral-500: #88a18e;
+    --color-neutral-600: #a7bcae;
+    --color-neutral-700: #cbd9cf;
+    --color-neutral-800: #e2ebe6;
+    --color-neutral-900: #f4f8f6;
+  }
+}
+
 
 html {
   scroll-behavior: smooth;
@@ -106,6 +128,11 @@ body {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass {
+  background: rgba(18, 28, 19, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .glass-dark {

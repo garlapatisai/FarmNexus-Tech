@@ -3,10 +3,7 @@ import { isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { OrderChatPage } from '../chat/OrderChatPage'
 
-// Shared local listings ref to look up farmer info
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localListingsRef: Record<string, any> = (window as any).__farmnexusLocalListings ??
-  ((window as any).__farmnexusLocalListings = {})
+import { localListingsRef } from '../../lib/localDb'
 
 export function BuyerChat() {
   const [searchParams] = useSearchParams()

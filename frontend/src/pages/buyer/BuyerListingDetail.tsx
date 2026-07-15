@@ -6,14 +6,7 @@ import { getBuyerLocation, haversineKm } from '../../lib/geo'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 
-// Shared in-memory store — same reference as FarmerListingFormPage
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localListingsRef: Record<string, any> = (window as any).__farmnexusLocalListings ??
-  ((window as any).__farmnexusLocalListings = {})
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localOrdersRef: Record<string, any> = (window as any).__farmnexusLocalOrders ??
-  ((window as any).__farmnexusLocalOrders = {})
+import { localOrdersRef, localListingsRef } from '../../lib/localDb'
 
 type ListingState = {
   id: string
@@ -60,9 +53,6 @@ export function BuyerListingDetail() {
   const [address, setAddress] = useState('')
   const [slide, setSlide] = useState(0)
   const [submitting, setSubmitting] = useState(false)
-  const [orderConfirmed, setOrderConfirmed] = useState(false)
-  const [orderedQty, setOrderedQty] = useState(0)
-  const [orderedTotal, setOrderedTotal] = useState(0)
   const [buyerPos, setBuyerPos] = useState<{ lat: number; lng: number } | null>(null)
 
   // Leaflet does not require an API key to load.
@@ -214,10 +204,8 @@ export function BuyerListingDetail() {
         created_at: new Date().toISOString()
       }
 
-      setOrderedQty(qty)
-      setOrderedTotal(total)
       setSubmitting(false)
-      setOrderConfirmed(true)
+      navigate(`/buyer/cart?orderId=${orderId}`)
       return
     }
 
@@ -242,61 +230,7 @@ export function BuyerListingDetail() {
     navigate(`/buyer/cart?orderId=${data.id}`)
   }
 
-  // ── Order Confirmed Overlay ──────────────────────────────────────────────
-  if (orderConfirmed && listing) {
-    return (
-      <main className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <div className="rounded-2xl border border-emerald-100 bg-gradient-to-b from-emerald-50 to-white p-10 shadow-lg">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-5xl">✅</div>
-          <h1 className="text-3xl font-extrabold text-emerald-800">Order Confirmed!</h1>
-          <p className="mt-2 text-neutral-600">Your order has been placed successfully.</p>
 
-          <div className="mt-6 divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white text-left shadow-sm">
-            <div className="flex justify-between px-5 py-3 text-sm">
-              <span className="text-neutral-500">Product</span>
-              <span className="font-semibold">{listing.produce_name}</span>
-            </div>
-            <div className="flex justify-between px-5 py-3 text-sm">
-              <span className="text-neutral-500">Quantity</span>
-              <span className="font-semibold">{orderedQty} kg</span>
-            </div>
-            <div className="flex justify-between px-5 py-3 text-sm">
-              <span className="text-neutral-500">Total</span>
-              <span className="font-semibold text-emerald-700">{formatINR(orderedTotal)}</span>
-            </div>
-            <div className="flex justify-between px-5 py-3 text-sm">
-              <span className="text-neutral-500">Farmer</span>
-              <span className="font-semibold">{farmer.name}</span>
-            </div>
-            {farmer.phone && (
-              <div className="flex justify-between px-5 py-3 text-sm">
-                <span className="text-neutral-500">Contact</span>
-                <a href={`tel:${farmer.phone}`} className="font-semibold text-primary hover:underline">{farmer.phone}</a>
-              </div>
-            )}
-            <div className="flex justify-between px-5 py-3 text-sm">
-              <span className="text-neutral-500">Delivery to</span>
-              <span className="max-w-[60%] text-right font-medium">{address}</span>
-            </div>
-          </div>
-
-          <p className="mt-5 text-sm text-neutral-500">The farmer will confirm your order shortly and get in touch.</p>
-
-          <div className="mt-6 flex gap-3 justify-center">
-            <Link to="/buyer/home" className="rounded-lg border border-neutral-200 px-5 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50">
-              Continue Shopping
-            </Link>
-            <Link
-              to={`/buyer/chat?farmerId=${listing.farmer_id}`}
-              className="rounded-lg bg-[#2E7D32] px-5 py-2.5 text-sm font-semibold text-white hover:opacity-90"
-            >
-              💬 Chat with Farmer
-            </Link>
-          </div>
-        </div>
-      </main>
-    )
-  }
 
   if (loading) {
     return (

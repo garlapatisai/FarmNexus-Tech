@@ -2,6 +2,7 @@ import type { Session, User } from '@supabase/supabase-js'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
+import { localUsersRef } from '../lib/localDb'
 
 export type UserRole = 'farmer' | 'buyer' | 'admin' | null
 
@@ -27,9 +28,9 @@ type AuthState = {
   fetchProfile: () => Promise<void>
   signOut: () => Promise<void>
   init: () => Promise<void>
-  createLocalSession: (role: UserRole, opts?: { phone?: string; name?: string; district?: string }) => void
+  createLocalSession: (role: UserRole, opts?: { phone?: string; name?: string; district?: string; password?: string }) => void
   /** @deprecated use createLocalSession */
-  createDemoSession: (role: UserRole, opts?: { phone?: string; name?: string; district?: string }) => void
+  createDemoSession: (role: UserRole, opts?: { phone?: string; name?: string; district?: string; password?: string }) => void
 }
 
 function makeLocalId() {
@@ -73,10 +74,19 @@ export const useAuthStore = create<AuthState>()(
       },
 
       createLocalSession: (role, opts) => {
-        const id = makeLocalId()
+        let id = ''
+        if (!opts?.phone) {
+          if (role === 'farmer') id = 'x'
+          else if (role === 'buyer') id = 'local-demo-buyer'
+          else if (role === 'admin') id = 'local-demo-admin'
+          else id = makeLocalId()
+        } else {
+          id = 'local-' + opts.phone.replace(/\D/g, '')
+        }
         const phone = opts?.phone ?? null
         const name = opts?.name ?? (role === 'farmer' ? 'Demo Farmer' : role === 'buyer' ? 'Demo Buyer' : 'Demo Admin')
         const district = opts?.district ?? 'Anantapur'
+        const password = opts?.password ?? (role === 'admin' ? 'sai@123123' : 'password123')
         const { fakeUser, fakeSession } = makeFakeSession(id)
 
         const profile: Profile = {
@@ -89,6 +99,14 @@ export const useAuthStore = create<AuthState>()(
           delivery_address: role === 'buyer' ? '123 Market Road, ' + district : null,
           location_lat: 15.5,
           location_lng: 77.6,
+        }
+
+        const existingUser = localUsersRef[id]
+        localUsersRef[id] = {
+          ...existingUser,
+          ...profile,
+          password: opts?.password ?? existingUser?.password ?? password,
+          created_at: existingUser?.created_at ?? new Date().toISOString()
         }
 
         set({ session: fakeSession, user: fakeUser, profile, initialized: true, isLocal: true })

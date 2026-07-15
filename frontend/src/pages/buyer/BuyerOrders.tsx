@@ -4,12 +4,7 @@ import { formatINR } from '../../lib/format'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localOrdersRef: Record<string, any> = (window as any).__farmnexusLocalOrders ??
-  ((window as any).__farmnexusLocalOrders = {})
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localListingsRef: Record<string, any> = (window as any).__farmnexusLocalListings ??
-  ((window as any).__farmnexusLocalListings = {})
+import { localOrdersRef, localListingsRef } from '../../lib/localDb'
 
 type OrderRow = {
   id: string
@@ -39,6 +34,7 @@ export function BuyerOrders() {
 
     if (isLocal || !isSupabaseConfigured()) {
       const orders = Object.values(localOrdersRef)
+        .filter((o: any) => o.buyer_id === user.id)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
       setRows(
@@ -166,6 +162,7 @@ export function BuyerOrders() {
                 <th className="px-3 py-2">Qty</th>
                 <th className="px-3 py-2">Amount</th>
                 <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Payment</th>
                 <th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
@@ -177,6 +174,27 @@ export function BuyerOrders() {
                   <td className="px-3 py-2">{o.quantity_kg} kg</td>
                   <td className="px-3 py-2">{formatINR(Number(o.total_amount))}</td>
                   <td className="px-3 py-2 capitalize">{o.status}</td>
+                  <td className="px-3 py-2">
+                    {o.payment_status === 'paid' ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                        Paid
+                      </span>
+                    ) : o.payment_status === 'refunded' ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-xs font-semibold text-red-600">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+                        Refunded
+                      </span>
+                    ) : (
+                      <Link
+                        to={`/buyer/cart?orderId=${o.id}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        Pay Now
+                      </Link>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     {o.status === 'dispatched' && (
                       <button type="button" className="text-xs font-medium text-primary" onClick={() => void markDelivered(o.id)}>

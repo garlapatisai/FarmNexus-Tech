@@ -5,15 +5,7 @@ import { useAuthStore } from '../../store/authStore'
 import { loadRazorpayScript } from '../../lib/razorpay'
 import { formatINR } from '../../lib/format'
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localOrdersRef: Record<string, any> = (window as any).__farmnexusLocalOrders ??
-  ((window as any).__farmnexusLocalOrders = {})
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localListingsRef: Record<string, any> = (window as any).__farmnexusLocalListings ??
-  ((window as any).__farmnexusLocalListings = {})
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localMessagesRef: Record<string, any[]> = (window as any).__farmnexusLocalMessages ??
-  ((window as any).__farmnexusLocalMessages = {})
+import { localOrdersRef, localListingsRef, localMessagesRef } from '../../lib/localDb'
 
 type Thread = {
   id: string

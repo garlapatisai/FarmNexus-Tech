@@ -2,6 +2,7 @@
   "name": "farmnexus-tech",
   "private": true,
   "version": "1.0.0",
+  "license": "MIT",
   "description": "FarmNexus Tech — frontend (Vite/React) + backend (Express)",
   "workspaces": [
     "frontend",

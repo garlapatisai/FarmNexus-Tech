@@ -8,10 +8,7 @@ import { useAuthStore } from '../../store/authStore'
 import { parseSearchQuery, type ParsedSearchFilters } from '../../services/gemini'
 import { isItemSaved, saveItem, unsaveItem } from './BuyerSavedItems'
 
-// Shared in-memory store — same reference as FarmerListingFormPage
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localListingsRef: Record<string, any> = (window as any).__farmnexusLocalListings ??
-  ((window as any).__farmnexusLocalListings = {})
+import { localListingsRef } from '../../lib/localDb'
 
 type Category = 'all' | 'vegetable' | 'fruit' | 'grain' | 'dairy' | 'other' | 'spices'
 
@@ -214,7 +211,7 @@ export function BuyerHome() {
   }, [rows, category, search, aiFilters])
 
   return (
-    <main className="mx-auto max-w-7xl px-4 lg:px-8 py-8 min-h-screen bg-white font-sans">
+    <main className="mx-auto max-w-7xl px-4 lg:px-8 py-8 min-h-screen bg-white dark:bg-neutral-900 font-sans">
       
       {/* Header spanning exactly like mockup */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-neutral-100">
@@ -224,7 +221,7 @@ export function BuyerHome() {
         </div>
         
         {/* Toggle Grid / Map */}
-        <div className="mt-4 sm:mt-0 flex items-center bg-[#F0F4F8] p-1 rounded-lg">
+        <div className="mt-4 sm:mt-0 flex items-center bg-light p-1 rounded-lg">
           <button 
             type="button"
             onClick={() => setViewMode('grid')}

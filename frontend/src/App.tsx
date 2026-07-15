@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -22,6 +23,7 @@ import { AdminLoginPage } from './pages/admin/AdminLoginPage'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { AdminUsers } from './pages/admin/AdminUsers'
 import { AdminOrders } from './pages/admin/AdminOrders'
+import { useThemeStore } from './store/themeStore'
 
 function FarmerShell({ children }: { children: React.ReactNode }) {
   return (
@@ -48,13 +50,27 @@ function AdminShell({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  const theme = useThemeStore((s) => s.theme)
+
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [theme])
+
   return (
     <BrowserRouter>
       <Routes>
+        {/* Auth routes without global Navbar */}
+        <Route path="/" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+
+        {/* App routes with global Navbar */}
         <Route element={<Layout />}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/home" element={<HomePage />} />
           <Route path="/admin/login" element={<AdminLoginPage />} />
 
           <Route

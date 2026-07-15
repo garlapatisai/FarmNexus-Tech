@@ -71,9 +71,9 @@ export function Navbar() {
   )
 
   return (
-    <header className="sticky top-0 z-50 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-b border-neutral-100">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-b border-neutral-100">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 lg:px-8 py-3">
-        <Link to="/" className="flex flex-col tracking-tight" onClick={() => setOpen(false)}>
+        <Link to="/" className="flex flex-col tracking-tight shrink-0" onClick={() => setOpen(false)}>
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2E7D32]/10 text-xl" aria-hidden>
               🌾
@@ -85,14 +85,14 @@ export function Navbar() {
         </Link>
 
         {/* Centered navigation links */}
-        <nav className="hidden items-center gap-2 md:flex absolute left-1/2 -translate-x-1/2">
+        <nav className="hidden md:flex flex-1 justify-center items-center gap-2 lg:gap-4 mx-4">
            {session && role === 'farmer' && farmerLinks}
            {session && role === 'buyer' && buyerLinks}
            {session && role === 'admin' && adminLinks}
         </nav>
 
         {/* Right side buttons */}
-        <nav className="hidden items-center gap-3 md:flex">
+        <nav className="hidden items-center gap-3 md:flex shrink-0">
           {!session && (
             <>
               <NavLink to="/register" className="rounded-full border border-neutral-300 px-5 py-2 text-sm font-semibold text-neutral-600 hover:bg-neutral-50 transition-colors">

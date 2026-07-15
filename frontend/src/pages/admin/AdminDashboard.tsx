@@ -9,7 +9,9 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { supabase } from '../../lib/supabase'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase'
+import { useAuthStore } from '../../store/authStore'
+import { localOrdersRef, localUsersRef } from '../../lib/localDb'
 
 export function AdminDashboard() {
   const [farmers, setFarmers] = useState<number | null>(null)
@@ -18,11 +20,49 @@ export function AdminDashboard() {
   const [disputes, setDisputes] = useState<number | null>(null)
   const [series, setSeries] = useState<{ day: string; orders: number }[]>([])
   const [error, setError] = useState<string | null>(null)
+  const isLocal = useAuthStore((s) => s.isLocal)
 
   useEffect(() => {
     void (async () => {
       const start = new Date()
       start.setHours(0, 0, 0, 0)
+
+      if (isLocal || !isSupabaseConfigured()) {
+        const allUsers = Object.values(localUsersRef)
+        const allOrders = Object.values(localOrdersRef)
+
+        const farmersCount = allUsers.filter((u: any) => u.role === 'farmer').length
+        const buyersCount = allUsers.filter((u: any) => u.role === 'buyer').length
+
+        const todayStr = start.toISOString().slice(0, 10)
+        const ordersTodayCount = allOrders.filter((o: any) => o.created_at.slice(0, 10) >= todayStr).length
+        const disputesCount = allOrders.filter((o: any) => o.status === 'disputed').length
+
+        setFarmers(farmersCount)
+        setBuyers(buyersCount)
+        setOrdersToday(ordersTodayCount)
+        setDisputes(disputesCount)
+
+        const byDay: Record<string, number> = {}
+        for (let i = 0; i < 30; i++) {
+          const d = new Date()
+          d.setDate(d.getDate() - (29 - i))
+          const key = d.toISOString().slice(0, 10)
+          byDay[key] = 0
+        }
+        for (const o of allOrders) {
+          const key = String(o.created_at).slice(0, 10)
+          if (key in byDay) byDay[key]++
+        }
+        setSeries(
+          Object.entries(byDay).map(([day, orders]) => ({
+            day: day.slice(8),
+            orders,
+          })),
+        )
+        return
+      }
+
       const [fc, bc, oc, dc] = await Promise.all([
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'farmer'),
         supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'buyer'),

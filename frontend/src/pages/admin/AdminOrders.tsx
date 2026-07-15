@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { formatINR } from '../../lib/format'
-import { supabase } from '../../lib/supabase'
+import { supabase, isSupabaseConfigured } from '../../lib/supabase'
+import { useAuthStore } from '../../store/authStore'
+import { localOrdersRef } from '../../lib/localDb'
 
 type OrderRow = {
   id: string
@@ -24,11 +26,26 @@ export function AdminOrders() {
   const [note, setNote] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const isLocal = useAuthStore((s) => s.isLocal)
 
   const load = useCallback(async () => {
     setLoading(true)
     const from = page * PAGE
     const to = from + PAGE - 1
+
+    if (isLocal || !isSupabaseConfigured()) {
+      let filtered = Object.values(localOrdersRef)
+      if (statusFilter) {
+        filtered = filtered.filter((o: any) => o.status === statusFilter)
+      }
+      filtered.sort((a: any, b: any) => b.created_at.localeCompare(a.created_at))
+      setRows(filtered.slice(from, to + 1) as OrderRow[])
+      setTotal(filtered.length)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
     let q = supabase
       .from('orders')
       .select('id, status, payment_status, quantity_kg, total_amount, delivery_address, reject_reason, created_at', { count: 'exact' })
@@ -44,13 +61,21 @@ export function AdminOrders() {
     setError(null)
     setRows((data as OrderRow[]) ?? [])
     setTotal(count ?? 0)
-  }, [page, statusFilter])
+  }, [page, statusFilter, isLocal])
 
   useEffect(() => {
     void load()
   }, [load])
 
   async function flagDispute(id: string) {
+    if (isLocal || !isSupabaseConfigured()) {
+      if (localOrdersRef[id]) {
+        localOrdersRef[id] = { ...localOrdersRef[id], status: 'disputed' }
+      }
+      void load()
+      return
+    }
+
     const { error: e } = await supabase.from('orders').update({ status: 'disputed' }).eq('id', id)
     if (e) {
       alert(e.message)
@@ -61,6 +86,16 @@ export function AdminOrders() {
 
   async function saveNote(id: string) {
     if (!note.trim()) return
+
+    if (isLocal || !isSupabaseConfigured()) {
+      if (localOrdersRef[id]) {
+        localOrdersRef[id] = { ...localOrdersRef[id], reject_reason: note.trim() }
+      }
+      setNote('')
+      void load()
+      return
+    }
+
     const { error: e } = await supabase.from('orders').update({ reject_reason: note.trim() }).eq('id', id)
     if (e) {
       alert(e.message)

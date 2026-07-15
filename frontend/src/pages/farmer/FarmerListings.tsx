@@ -3,10 +3,7 @@ import { Link } from 'react-router-dom'
 import { formatINR } from '../../lib/format'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
-// Shared in-memory store — same reference as FarmerListingFormPage
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const localListingsRef: Record<string, any> = (window as any).__farmnexusLocalListings ??
-  ((window as any).__farmnexusLocalListings = {})
+import { localListingsRef } from '../../lib/localDb'
 
 
 type ListingRow = {
@@ -34,7 +31,7 @@ export function FarmerListings() {
 
     // Local session mode — show listings from the in-memory store
     if (isLocal || !isSupabaseConfigured()) {
-      const local = Object.values(localListingsRef) as ListingRow[]
+      const local = (Object.values(localListingsRef) as any[]).filter((l) => l.farmer_id === user.id) as ListingRow[]
       // Merge with default demo rows if no local listings yet
       const demo: ListingRow[] = local.length === 0 ? [
         { id: 'l1', produce_name: 'Cherry Tomatoes', category: 'vegetable', price_per_kg: 45, quantity_kg: 120, min_order_kg: 5, is_active: true, photos: [], created_at: new Date().toISOString() },
@@ -53,8 +50,7 @@ export function FarmerListings() {
       .order('created_at', { ascending: false })
     setLoading(false)
     if (e) {
-      // If Supabase fails (e.g. RLS not set up), show local listings
-      const local = Object.values(localListingsRef) as ListingRow[]
+      const local = (Object.values(localListingsRef) as any[]).filter((l) => l.farmer_id === user.id) as ListingRow[]
       setRows(local)
       setError(null)
       return
@@ -100,7 +96,6 @@ export function FarmerListings() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">My listings</h1>
-          <p className="text-sm text-neutral-600">Manage produce and photos (Supabase `listings` + Storage).</p>
         </div>
         <Link
           to="/farmer/listings/new"

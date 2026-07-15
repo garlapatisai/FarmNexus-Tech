@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
+import { localListingsRef, localOrdersRef } from '../../lib/localDb'
 import { chatWithFarmAssistant, type GeminiMessage } from '../../services/gemini'
 
 function formatINR(n: number) {
@@ -49,12 +50,58 @@ export function FarmerAnalytics() {
 
   // Load real data from Supabase if available
   useEffect(() => {
-    if (isLocal || !isSupabaseConfigured() || !user?.id) {
+    if (!user?.id) return
+
+    let cancelled = false
+
+    if (isLocal) {
+      const orders = Object.values(localOrdersRef)
+        .filter((o: any) => o.farmer_id === user.id && ['delivered', 'dispatched', 'accepted', 'placed'].includes(o.status))
+
+      // Aggregate by month
+      const byMonth: Record<string, { revenue: number; orders: number }> = {}
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      
+      // Initialize months of the year up to the current month to show 0 in chart instead of empty chart
+      const currentMonth = new Date().getMonth()
+      for (let i = 0; i <= currentMonth; i++) {
+        byMonth[monthNames[i]] = { revenue: 0, orders: 0 }
+      }
+
+      for (const o of orders) {
+        const d = o.created_at ? new Date(o.created_at) : new Date()
+        const key = monthNames[d.getMonth()]
+        if (!byMonth[key]) byMonth[key] = { revenue: 0, orders: 0 }
+        byMonth[key].revenue += Number(o.total_amount ?? 0)
+        byMonth[key].orders += 1
+      }
+      const months = Object.entries(byMonth).map(([month, data]) => ({ month, ...data }))
+      setMonthlyData(months)
+
+      // Get crop breakdown
+      const byCrop: Record<string, { revenue: number; orders: number }> = {}
+      for (const o of orders) {
+        const name = localListingsRef[o.listing_id]?.produce_name ?? 'Local Produce'
+        if (!byCrop[name]) byCrop[name] = { revenue: 0, orders: 0 }
+        byCrop[name].revenue += Number(o.total_amount ?? 0)
+        byCrop[name].orders += 1
+      }
+      const colors = ['#2E7D32', '#F57C00', '#D32F2F', '#1F8A70', '#795548', '#7B1FA2']
+      const crops = Object.entries(byCrop)
+        .map(([name, data], i) => ({ name, ...data, color: colors[i % colors.length] }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 6)
+
+      setCropData(crops)
+      setUsingMock(false)
+      return
+    }
+
+    if (!isSupabaseConfigured()) {
       setUsingMock(true)
       return
     }
 
-    let cancelled = false
     void (async () => {
       try {
         const { data: orders } = await supabase
@@ -127,14 +174,26 @@ Give me 2-3 short, actionable insights to grow my farm business. Focus on season
       const reply = await chatWithFarmAssistant(messages)
       setAiInsight(reply)
     } catch (e) {
-      setAiError(e instanceof Error ? e.message : 'Failed to generate insight')
+      console.warn("Gemini API error. Falling back to local insights engine:", e);
+      
+      const topCropName = topCrop?.name ?? 'your crops';
+      const bestMonthName = bestMonth?.month ?? 'peak months';
+      const formattedAvgOrderValue = formatINR(avgOrderValue);
+      
+      const localInsights = `🌿 **FarmNexusTECH Market Insights**
+
+1. **Leverage ${topCropName} Demand**: Since ${topCropName} is your leading crop, consider expanding production or marketing premium wholesale options to maximize your profit margin.
+2. **Seasonal Transition Strategy**: Your revenue peaks in ${bestMonthName}. Introduce short-cycle vegetables or crop rotation during slower months to ensure consistent cash flow throughout the year.
+3. **Incentivize Larger Orders**: With an average transaction size of ${formattedAvgOrderValue}, offer volume-based discounts or bundled crop listings to attract commercial buyers looking for high-capacity shipments.`;
+      
+      setAiInsight(localInsights);
     } finally {
       setAiLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-[#F0F4F8] font-sans pb-16">
+    <div className="min-h-screen bg-light font-sans pb-16">
       <main className="mx-auto max-w-7xl px-4 lg:px-8 pt-8">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
@@ -230,7 +289,7 @@ Give me 2-3 short, actionable insights to grow my farm business. Focus on season
               </div>
               <div>
                 <h2 className="text-lg font-bold text-neutral-800">AI Market Insights</h2>
-                <p className="text-xs text-neutral-500">Powered by Google Gemini</p>
+                <p className="text-xs text-neutral-500">🌾 FarmNexusTECH</p>
               </div>
             </div>
             <button
