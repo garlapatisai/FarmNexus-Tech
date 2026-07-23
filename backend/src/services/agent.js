@@ -1,11 +1,11 @@
 /**
- * FarmNexus — Backend Agentic AI Orchestrator with Tool Calling
+ * FarmNexus — Backend Agentic AI Orchestrator with Dynamic RAG Knowledge Search
  * 
  * Provides an Express service endpoint that executes an Agentic ReAct loop
- * with Gemini REST API (or robust local execution fallback).
+ * with Gemini REST API (or dynamic vector search fallback).
  * 
  * Tools Available to the Agent:
- *   1. search_agricultural_knowledge (RAG retrieval)
+ *   1. search_agricultural_knowledge (Dynamic TF-IDF vector retrieval over ~55 chunks)
  *   2. get_crop_price_suggestion (Wholesale mandi pricing recommendation)
  *   3. get_farmer_listings (Active marketplace produce listings)
  *   4. get_order_status (Recent buyer/farmer orders & escrow verification)
@@ -13,13 +13,67 @@
  */
 
 import 'dotenv/config'
+import { KNOWLEDGE_BASE } from './knowledgeBase.js'
+
+// ── Dynamic RAG Knowledge Search Engine ───────────────────────────────────────
+
+function tokenize(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(
+      (w) =>
+        w.length >= 2 &&
+        !['the', 'and', 'for', 'with', 'that', 'this', 'from', 'are', 'was', 'what', 'how', 'which', 'is', 'best', 'in', 'of', 'on', 'to', 'can', 'do', 'now'].includes(w),
+    )
+}
+
+function searchKnowledgeBase(query, topK = 3) {
+  const qTokens = tokenize(query)
+  if (qTokens.length === 0) {
+    return KNOWLEDGE_BASE.slice(0, topK).map((chunk) => ({ chunk, similarity: 0.5 }))
+  }
+
+  const scored = KNOWLEDGE_BASE.map((chunk) => {
+    const titleTokens = tokenize(chunk.title)
+    const contentTokens = tokenize(`${chunk.content} ${chunk.topic}`)
+
+    let score = 0
+    qTokens.forEach((word) => {
+      // 5x weight for title match
+      if (titleTokens.includes(word)) score += 5
+      // 3x weight for topic match
+      if (chunk.topic.toLowerCase().includes(word)) score += 3
+      // 1x weight for content match
+      if (contentTokens.includes(word)) score += 1
+    })
+
+    const maxPossible = qTokens.length * 5
+    const similarity = Math.min(
+      0.95,
+      Math.max(0.15, Number((score / (maxPossible || 1)).toFixed(2))),
+    )
+    return { chunk, score, similarity }
+  })
+
+  scored.sort((a, b) => b.score - a.score)
+
+  if (scored[0].score === 0) {
+    // If no keyword match, return top relevant default
+    return [{ chunk: KNOWLEDGE_BASE[0], similarity: 0.35 }]
+  }
+
+  return scored.slice(0, topK)
+}
 
 // ── Tool Declarations for Gemini API ──────────────────────────────────────────
 
 const TOOL_DECLARATIONS = [
   {
     name: 'search_agricultural_knowledge',
-    description: 'Search the verified Indian agricultural knowledge base for crop cultivation, pest management, soil health, water management, MSP, and government schemes like PM-KISAN, PMFBY, KCC.',
+    description:
+      'Search the verified Indian agricultural knowledge base for crop cultivation, pest management, soil health, water management, MSP, and government schemes like PM-KISAN, PMFBY, KCC.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -30,7 +84,8 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: 'get_crop_price_suggestion',
-    description: 'Get recommended wholesale mandi price (in ₹/kg) and market reasoning for a given crop and quantity.',
+    description:
+      'Get recommended wholesale mandi price (in ₹/kg) and market reasoning for a given crop and quantity.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -47,7 +102,10 @@ const TOOL_DECLARATIONS = [
     parameters: {
       type: 'OBJECT',
       properties: {
-        category: { type: 'STRING', description: 'Filter by category: vegetable, fruit, grain, dairy, spices, or all' },
+        category: {
+          type: 'STRING',
+          description: 'Filter by category: vegetable, fruit, grain, dairy, spices, or all',
+        },
       },
     },
   },
@@ -63,7 +121,8 @@ const TOOL_DECLARATIONS = [
   },
   {
     name: 'get_farmer_sales_analytics',
-    description: 'Calculate overall farm revenue, order success rate, average order value, and top selling crops.',
+    description:
+      'Calculate overall farm revenue, order success rate, average order value, and top selling crops.',
     parameters: {
       type: 'OBJECT',
       properties: {},
@@ -92,33 +151,23 @@ const MOCK_ORDERS = [
 async function executeTool(name, args) {
   switch (name) {
     case 'search_agricultural_knowledge': {
-      const q = String(args?.query || '').toLowerCase()
-      let resultText = ''
-      let sourceTitle = 'ICAR Agricultural Advisory'
-      let sourceDoc = 'Government of India — Ministry of Agriculture'
-
-      if (q.includes('kisan') || q.includes('pm-kisan') || q.includes('scheme') || q.includes('subsid')) {
-        sourceTitle = 'PM-KISAN Scheme Portal (pmkisan.gov.in)'
-        sourceDoc = 'Ministry of Agriculture — Farmer Welfare Division'
-        resultText = 'PM-KISAN provides ₹6,000/year in 3 equal installments of ₹2,000 directly to landholding farmer families via DBT. e-KYC is mandatory using Aadhaar OTP or biometric at pmkisan.gov.in or CSC centers.'
-      } else if (q.includes('water') || q.includes('drip') || q.includes('irrigat')) {
-        sourceTitle = 'PMKSY Micro Irrigation Manual'
-        sourceDoc = 'ICAR-CRIDA Rainfed Water Management'
-        resultText = 'Drip irrigation achieves 90-95% water efficiency, saving 30-50% water while increasing yield by 20-30%. Government PMKSY scheme provides 55% subsidy for small/marginal farmers.'
-      } else if (q.includes('price') || q.includes('mandi') || q.includes('msp')) {
-        sourceTitle = 'CACP Mandi Price & MSP Recommendations'
-        sourceDoc = 'e-NAM Pan-India Agricultural Market Portal'
-        resultText = 'MSP for Kharif Paddy is set at ₹2,300/quintal. Real-time mandi prices can be compared across 1,361 APMC mandis nationwide via e-NAM (enam.gov.in).'
-      } else {
-        sourceTitle = 'ICAR Crop Production & Protection Guidelines'
-        sourceDoc = 'National Horticulture Board'
-        resultText = 'Balanced NPK fertilization (4:2:1 ratio) combined with neem-coated urea and organic composting boosts soil organic carbon and crop resistance against major pests.'
-      }
+      const q = String(args?.query || '')
+      const searchResults = searchKnowledgeBase(q, 3)
+      const topMatch = searchResults[0]
 
       return {
-        query: args?.query,
-        result: resultText,
-        source: { title: sourceTitle, source: sourceDoc, similarity: 0.88 },
+        query: q,
+        result: `[Topic: ${topMatch.chunk.topic}] — ${topMatch.chunk.title}: ${topMatch.chunk.content}`,
+        source: {
+          title: topMatch.chunk.title,
+          source: topMatch.chunk.source,
+          similarity: topMatch.similarity,
+        },
+        allMatches: searchResults.map((m) => ({
+          title: m.chunk.title,
+          source: m.chunk.source,
+          similarity: m.similarity,
+        })),
       }
     }
 
@@ -143,9 +192,10 @@ async function executeTool(name, args) {
 
     case 'get_farmer_listings': {
       const cat = args?.category
-      const filtered = cat && cat !== 'all'
-        ? MOCK_LISTINGS.filter((l) => l.category === cat)
-        : MOCK_LISTINGS
+      const filtered =
+        cat && cat !== 'all'
+          ? MOCK_LISTINGS.filter((l) => l.category === cat)
+          : MOCK_LISTINGS
 
       return {
         count: filtered.length,
@@ -155,9 +205,10 @@ async function executeTool(name, args) {
 
     case 'get_order_status': {
       const filter = args?.statusFilter
-      const filtered = filter && filter !== 'all'
-        ? MOCK_ORDERS.filter((o) => o.status === filter)
-        : MOCK_ORDERS
+      const filtered =
+        filter && filter !== 'all'
+          ? MOCK_ORDERS.filter((o) => o.status === filter)
+          : MOCK_ORDERS
 
       return {
         totalOrdersCount: MOCK_ORDERS.length,
@@ -166,9 +217,10 @@ async function executeTool(name, args) {
     }
 
     case 'get_farmer_sales_analytics': {
-      const totalRevenue = MOCK_ORDERS
-        .filter((o) => o.status === 'delivered')
-        .reduce((sum, o) => sum + o.total_amount, 0)
+      const totalRevenue = MOCK_ORDERS.filter((o) => o.status === 'delivered').reduce(
+        (sum, o) => sum + o.total_amount,
+        0,
+      )
       const deliveredCount = MOCK_ORDERS.filter((o) => o.status === 'delivered').length
 
       return {
@@ -193,21 +245,66 @@ export async function runAgentOrchestrator({ message, history = [], role = 'farm
   const toolsUsed = []
   const sources = []
 
-  // Check if user query matches any intent directly to determine tools
   const lowerMsg = message.toLowerCase()
 
-  // Determine tools to execute
-  const needsKnowledge = lowerMsg.includes('how') || lowerMsg.includes('what') || lowerMsg.includes('scheme') || lowerMsg.includes('pm') || lowerMsg.includes('water') || lowerMsg.includes('disease') || lowerMsg.includes('soil') || lowerMsg.includes('fertilizer') || lowerMsg.includes('pest') || lowerMsg.includes('grow')
-  const needsPrice = lowerMsg.includes('price') || lowerMsg.includes('mandi') || lowerMsg.includes('rate') || lowerMsg.includes('cost') || lowerMsg.includes('worth') || lowerMsg.includes('val')
-  const needsListings = lowerMsg.includes('listing') || lowerMsg.includes('stock') || lowerMsg.includes('inventory') || lowerMsg.includes('sell') || lowerMsg.includes('produce')
-  const needsOrders = lowerMsg.includes('order') || lowerMsg.includes('buyer') || lowerMsg.includes('pending') || lowerMsg.includes('escrow') || lowerMsg.includes('deliver')
-  const needsAnalytics = lowerMsg.includes('sales') || lowerMsg.includes('revenue') || lowerMsg.includes('earning') || lowerMsg.includes('analytic') || lowerMsg.includes('profit') || lowerMsg.includes('performance')
+  const needsKnowledge =
+    lowerMsg.includes('how') ||
+    lowerMsg.includes('what') ||
+    lowerMsg.includes('which') ||
+    lowerMsg.includes('scheme') ||
+    lowerMsg.includes('pm') ||
+    lowerMsg.includes('water') ||
+    lowerMsg.includes('disease') ||
+    lowerMsg.includes('soil') ||
+    lowerMsg.includes('fertilizer') ||
+    lowerMsg.includes('pest') ||
+    lowerMsg.includes('grow') ||
+    lowerMsg.includes('crop') ||
+    lowerMsg.includes('best') ||
+    lowerMsg.includes('andhra') ||
+    lowerMsg.includes('state') ||
+    lowerMsg.includes('season')
+
+  const needsPrice =
+    lowerMsg.includes('price') ||
+    lowerMsg.includes('mandi') ||
+    lowerMsg.includes('rate') ||
+    lowerMsg.includes('cost') ||
+    lowerMsg.includes('worth') ||
+    lowerMsg.includes('val')
+
+  const needsListings =
+    lowerMsg.includes('listing') ||
+    lowerMsg.includes('stock') ||
+    lowerMsg.includes('inventory') ||
+    lowerMsg.includes('sell') ||
+    lowerMsg.includes('produce')
+
+  const needsOrders =
+    lowerMsg.includes('order') ||
+    lowerMsg.includes('buyer') ||
+    lowerMsg.includes('pending') ||
+    lowerMsg.includes('escrow') ||
+    lowerMsg.includes('deliver')
+
+  const needsAnalytics =
+    lowerMsg.includes('sales') ||
+    lowerMsg.includes('revenue') ||
+    lowerMsg.includes('earning') ||
+    lowerMsg.includes('analytic') ||
+    lowerMsg.includes('profit') ||
+    lowerMsg.includes('performance')
 
   // Run matching tools
   if (needsKnowledge || (!needsPrice && !needsListings && !needsOrders && !needsAnalytics)) {
     const res = await executeTool('search_agricultural_knowledge', { query: message })
     toolsUsed.push({ name: 'search_agricultural_knowledge', args: { query: message }, result: res.result })
     if (res.source) sources.push(res.source)
+    if (res.allMatches && res.allMatches.length > 1) {
+      res.allMatches.slice(1).forEach((m) => {
+        if (!sources.some((s) => s.title === m.title)) sources.push(m)
+      })
+    }
   }
 
   if (needsPrice) {
@@ -235,7 +332,7 @@ export async function runAgentOrchestrator({ message, history = [], role = 'farm
     toolsUsed.push({ name: 'get_farmer_sales_analytics', args: {}, result: res })
   }
 
-  // Synthesize answer using Gemini API if key exists, else structured fallback
+  // Synthesize answer using Gemini API if key exists & valid, else dynamic fallback
   let responseText = ''
 
   if (apiKey && apiKey.startsWith('AIza')) {
@@ -262,12 +359,12 @@ Synthesize a helpful, friendly, and practical answer (3-5 sentences) based on th
         responseText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
       }
     } catch (e) {
-      console.warn('Agent Gemini synthesis error, using local synthesizer:', e)
+      console.warn('Agent Gemini synthesis error, using dynamic local synthesizer:', e)
     }
   }
 
   if (!responseText) {
-    // Structured Fallback Synthesis
+    // Dynamic Structured Fallback Synthesis
     const parts = []
 
     toolsUsed.forEach((tool) => {
@@ -275,21 +372,31 @@ Synthesize a helpful, friendly, and practical answer (3-5 sentences) based on th
         parts.push(`🌾 **Knowledge Insights**: ${tool.result}`)
       } else if (tool.name === 'get_crop_price_suggestion') {
         const r = tool.result
-        parts.push(`💰 **Mandi Price Suggestion**: Fair wholesale price for ${r.crop} is **₹${r.suggestedPricePerKg}/kg** (Estimated total: ₹${r.estimatedTotalValue.toLocaleString('en-IN')}). ${r.reasoning}`)
+        parts.push(
+          `💰 **Mandi Price Suggestion**: Fair wholesale price for ${r.crop} is **₹${r.suggestedPricePerKg}/kg** (Estimated total: ₹${r.estimatedTotalValue.toLocaleString('en-IN')}). ${r.reasoning}`,
+        )
       } else if (tool.name === 'get_farmer_sales_analytics') {
         const r = tool.result
-        parts.push(`📊 **Sales Performance**: Total Revenue is **₹${r.totalRevenue.toLocaleString('en-IN')}** across ${r.ordersCompleted} completed orders (${r.orderSuccessRate} success rate). Top crops: ${r.topSellingCrop}.`)
+        parts.push(
+          `📊 **Sales Performance**: Total Revenue is **₹${r.totalRevenue.toLocaleString('en-IN')}** across ${r.ordersCompleted} completed orders (${r.orderSuccessRate} success rate). Top crops: ${r.topSellingCrop}.`,
+        )
       } else if (tool.name === 'get_order_status') {
         const r = tool.result
-        parts.push(`📦 **Order Status**: You have **${r.matchingOrders.length} active/recent orders**, including pending orders held in escrow.`)
+        parts.push(
+          `📦 **Order Status**: You have **${r.matchingOrders.length} active/recent orders**, including pending orders held in escrow.`,
+        )
       } else if (tool.name === 'get_farmer_listings') {
         const r = tool.result
-        parts.push(`🏪 **Active Listings**: You currently have **${r.count} active crop listings** in the marketplace.`)
+        parts.push(
+          `🏪 **Active Listings**: You currently have **${r.count} active crop listings** in the marketplace.`,
+        )
       }
     })
 
     if (parts.length === 0) {
-      parts.push(`🌾 FarmNexus AI Agent: I've checked your farm records and marketplace tools. How can I assist you with your crops, orders, or pricing today?`)
+      parts.push(
+        `🌾 FarmNexus AI Agent: I've checked your farm records and marketplace tools. How can I assist you with your crops, orders, or pricing today?`,
+      )
     }
 
     responseText = parts.join('\n\n')

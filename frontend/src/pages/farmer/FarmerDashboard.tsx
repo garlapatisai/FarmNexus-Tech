@@ -236,10 +236,23 @@ export function FarmerDashboard() {
       } catch (e) {
         console.warn('Fallback chat responder error:', e)
         setChatSearching(false)
-        setChatMessages((prev) => [
-          ...prev,
-          { role: 'model', text: `🌾 FarmNexus AI: Mandi wholesale prices for staple crops like paddy and wheat are holding stable. Drip irrigation is highly recommended to conserve up to 40% water.` },
-        ])
+        try {
+          const ragResult = await generateRAGResponse(text)
+          setChatMessages((prev) => [
+            ...prev,
+            {
+              role: 'model',
+              text: ragResult.answer,
+              sources: ragResult.sources,
+              retrievalMs: ragResult.retrievalTimeMs,
+            },
+          ])
+        } catch {
+          setChatMessages((prev) => [
+            ...prev,
+            { role: 'model', text: `🌾 FarmNexus AI: For detailed crop management, mandi wholesale rates, or PM-KISAN guidance, consult your local Krishi Vigyan Kendra (KVK) or check e-NAM portal.` },
+          ])
+        }
       }
     } finally {
       setChatLoading(false)
