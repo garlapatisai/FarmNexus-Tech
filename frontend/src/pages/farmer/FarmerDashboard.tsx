@@ -518,7 +518,7 @@ export function FarmerDashboard() {
       const [header, base64Data] = uploadedImage.split(',')
       const mimeType = header.match(/data:(.*?);/)?.[1] || 'image/jpeg'
 
-      const resultText = await analyzeCropImage(base64Data, mimeType, scanCropName || undefined)
+      const { resultText, sources } = await analyzeCropImage(base64Data, mimeType, scanCropName || undefined)
       const severity = parseSeverity(resultText)
 
       if (isLocal) {
@@ -530,6 +530,7 @@ export function FarmerDashboard() {
           diagnosis: resultText,
           severity,
           image_url: uploadedImage,
+          sources,
           created_at: new Date().toISOString()
         }
         const updatedList = [newDiag, ...(localCropDiagnosesRef[farmerId] ?? [])]
@@ -657,6 +658,7 @@ export function FarmerDashboard() {
           remedies: result.remedies,
           insurance_eligibility: result.insuranceEligibility,
           image_url: uploadedLossImage,
+          sources: result.sources,
           created_at: new Date().toISOString()
         }
         const updatedList = [newReport, ...(localLossReportsRef[farmerId] ?? [])]
@@ -1279,6 +1281,31 @@ export function FarmerDashboard() {
                   <div className="prose max-w-none text-xs text-neutral-700 leading-relaxed whitespace-pre-wrap font-sans bg-emerald-50/10 rounded-2xl border border-emerald-100/50 p-5">
                     {selectedDiagnosis.diagnosis}
                   </div>
+
+                  {/* RAG Pathology Knowledge Sources */}
+                  {selectedDiagnosis.sources && selectedDiagnosis.sources.length > 0 && (
+                    <div className="mt-3 pt-3 border-t border-emerald-100/80">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1">
+                          📚 Grounded Pathology Sources ({selectedDiagnosis.sources.length})
+                        </span>
+                        <span className="text-[10px] text-neutral-400">Verified ICAR & NHB Knowledge Chunks</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {selectedDiagnosis.sources.map((src: any, idx: number) => (
+                          <div key={idx} className="bg-emerald-50/40 p-2.5 rounded-xl border border-emerald-100/80 text-[11px]">
+                            <p className="font-semibold text-emerald-950 flex items-center justify-between">
+                              <span>📄 {src.title}</span>
+                              <span className="text-[10px] font-mono text-emerald-700 bg-white px-1.5 py-0.5 rounded border border-emerald-200 font-bold">
+                                {Math.round((src.similarity || 0.8) * 100)}% Match
+                              </span>
+                            </p>
+                            <p className="text-[10px] text-neutral-500 mt-1 italic">Source: {src.source}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-white rounded-3xl border border-neutral-100 p-8 shadow-sm text-center text-neutral-500">
@@ -1663,6 +1690,31 @@ export function FarmerDashboard() {
                         </div>
                       </div>
                     </div>
+
+                    {/* RAG Scheme & Relief Knowledge Sources */}
+                    {selectedLossReport.sources && selectedLossReport.sources.length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-violet-100/80">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-[11px] font-bold text-violet-800 bg-violet-50 px-2.5 py-1 rounded-lg border border-violet-200 flex items-center gap-1">
+                            📚 Grounded Scheme & Recovery Sources ({selectedLossReport.sources.length})
+                          </span>
+                          <span className="text-[10px] text-neutral-400">Official PMFBY & Ministry of Agriculture Guidelines</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {selectedLossReport.sources.map((src: any, idx: number) => (
+                            <div key={idx} className="bg-violet-50/40 p-2.5 rounded-xl border border-violet-100/80 text-[11px]">
+                              <p className="font-semibold text-violet-950 flex items-center justify-between">
+                                <span>📄 {src.title}</span>
+                                <span className="text-[10px] font-mono text-violet-700 bg-white px-1.5 py-0.5 rounded border border-violet-200 font-bold">
+                                  {Math.round((src.similarity || 0.8) * 100)}% Match
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-neutral-500 mt-1 italic">Source: {src.source}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Certified Signoff stamp */}

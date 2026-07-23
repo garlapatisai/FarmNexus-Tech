@@ -83,8 +83,8 @@ export function LoginPage() {
       // Extract base64 data and mime type from data URL
       const [header, base64Data] = uploadedImage.split(',')
       const mimeType = header.match(/data:(.*?);/)?.[1] || 'image/jpeg'
-      const result = await analyzeCropImage(base64Data, mimeType, cropProtectionForm.crop || undefined)
-      setFeatureResult(result)
+      const { resultText } = await analyzeCropImage(base64Data, mimeType, cropProtectionForm.crop || undefined)
+      setFeatureResult(resultText)
     } catch (err) {
       console.warn('Image analysis error:', err)
       setFeatureResult('🔍 **AI Analysis Result**\n\n🌿 The image shows signs of **Leaf Blight** (possible Bacterial or Fungal origin).\n\n⚡ **Severity**: Medium\n\n💊 **Treatment**:\n- Apply Copper Oxychloride spray (3g/L water)\n- Use Neem Oil (organic option) — 5ml/L water\n- Remove affected leaves and destroy them\n\n🛡️ **Prevention**:\n- Ensure proper plant spacing for air circulation\n- Avoid overhead irrigation during humid weather\n- Rotate crops every season')
