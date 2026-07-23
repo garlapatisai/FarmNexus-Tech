@@ -8,6 +8,8 @@ function createLocalProxy<T extends object>(key: string, initial: T): T {
   if (key === 'farmnexus_local_orders') (window as any).__farmnexusLocalOrders = data
   if (key === 'farmnexus_local_listings') (window as any).__farmnexusLocalListings = data
   if (key === 'farmnexus_local_messages') (window as any).__farmnexusLocalMessages = data
+  if (key === 'farmnexus_local_crop_diagnoses') (window as any).__farmnexusLocalCropDiagnoses = data
+  if (key === 'farmnexus_local_loss_reports') (window as any).__farmnexusLocalLossReports = data
 
   return new Proxy(data, {
     set(target, prop, value) {
@@ -18,6 +20,8 @@ function createLocalProxy<T extends object>(key: string, initial: T): T {
       if (key === 'farmnexus_local_orders') (window as any).__farmnexusLocalOrders = target
       if (key === 'farmnexus_local_listings') (window as any).__farmnexusLocalListings = target
       if (key === 'farmnexus_local_messages') (window as any).__farmnexusLocalMessages = target
+      if (key === 'farmnexus_local_crop_diagnoses') (window as any).__farmnexusLocalCropDiagnoses = target
+      if (key === 'farmnexus_local_loss_reports') (window as any).__farmnexusLocalLossReports = target
       
       return true
     },
@@ -29,6 +33,8 @@ function createLocalProxy<T extends object>(key: string, initial: T): T {
       if (key === 'farmnexus_local_orders') (window as any).__farmnexusLocalOrders = target
       if (key === 'farmnexus_local_listings') (window as any).__farmnexusLocalListings = target
       if (key === 'farmnexus_local_messages') (window as any).__farmnexusLocalMessages = target
+      if (key === 'farmnexus_local_crop_diagnoses') (window as any).__farmnexusLocalCropDiagnoses = target
+      if (key === 'farmnexus_local_loss_reports') (window as any).__farmnexusLocalLossReports = target
       
       return true
     }
@@ -61,6 +67,8 @@ export const localOrdersRef = createLocalProxy<Record<string, any>>('farmnexus_l
 export const localListingsRef = createLocalProxy<Record<string, any>>('farmnexus_local_listings', defaultListings)
 export const localMessagesRef = createLocalProxy<Record<string, any[]>>('farmnexus_local_messages', {})
 export const localUsersRef = createLocalProxy<Record<string, any>>('farmnexus_local_users', defaultUsers)
+export const localCropDiagnosesRef = createLocalProxy<Record<string, any>>('farmnexus_local_crop_diagnoses', {})
+export const localLossReportsRef = createLocalProxy<Record<string, any>>('farmnexus_local_loss_reports', {})
 
 // Sync default users to local storage if they are missing or outdated
 for (const [key, val] of Object.entries(defaultUsers)) {

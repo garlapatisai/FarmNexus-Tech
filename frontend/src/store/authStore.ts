@@ -1,6 +1,6 @@
 import type { Session, User } from '@supabase/supabase-js'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import { localUsersRef } from '../lib/localDb'
 
@@ -24,13 +24,14 @@ type AuthState = {
   profile: Profile | null
   initialized: boolean
   isLocal: boolean  // true = session stored locally (no Supabase auth needed)
+  rememberMe: boolean
   setSession: (session: Session | null) => void
   fetchProfile: () => Promise<void>
   signOut: () => Promise<void>
   init: () => Promise<void>
-  createLocalSession: (role: UserRole, opts?: { phone?: string; name?: string; district?: string; password?: string }) => void
+  createLocalSession: (role: UserRole, opts?: { id?: string; phone?: string; name?: string; district?: string; password?: string; rememberMe?: boolean }) => void
   /** @deprecated use createLocalSession */
-  createDemoSession: (role: UserRole, opts?: { phone?: string; name?: string; district?: string; password?: string }) => void
+  createDemoSession: (role: UserRole, opts?: { id?: string; phone?: string; name?: string; district?: string; password?: string; rememberMe?: boolean }) => void
 }
 
 function makeLocalId() {
@@ -68,25 +69,29 @@ export const useAuthStore = create<AuthState>()(
       profile: null,
       initialized: false,
       isLocal: false,
+      rememberMe: true,
 
       setSession: (session) => {
         set({ session, user: session?.user ?? null })
       },
 
       createLocalSession: (role, opts) => {
-        let id = ''
-        if (!opts?.phone) {
-          if (role === 'farmer') id = 'x'
-          else if (role === 'buyer') id = 'local-demo-buyer'
-          else if (role === 'admin') id = 'local-demo-admin'
-          else id = makeLocalId()
-        } else {
-          id = 'local-' + opts.phone.replace(/\D/g, '')
+        let id = opts?.id || ''
+        if (!id) {
+          if (!opts?.phone) {
+            if (role === 'farmer') id = 'x'
+            else if (role === 'buyer') id = 'local-demo-buyer'
+            else if (role === 'admin') id = 'local-demo-admin'
+            else id = makeLocalId()
+          } else {
+            id = 'local-' + opts.phone.replace(/\D/g, '')
+          }
         }
         const phone = opts?.phone ?? null
         const name = opts?.name ?? (role === 'farmer' ? 'Demo Farmer' : role === 'buyer' ? 'Demo Buyer' : 'Demo Admin')
         const district = opts?.district ?? 'Anantapur'
         const password = opts?.password ?? (role === 'admin' ? 'sai@123123' : 'password123')
+        const rememberMe = opts?.rememberMe ?? true
         const { fakeUser, fakeSession } = makeFakeSession(id)
 
         const profile: Profile = {
@@ -109,7 +114,7 @@ export const useAuthStore = create<AuthState>()(
           created_at: existingUser?.created_at ?? new Date().toISOString()
         }
 
-        set({ session: fakeSession, user: fakeUser, profile, initialized: true, isLocal: true })
+        set({ session: fakeSession, user: fakeUser, profile, initialized: true, isLocal: true, rememberMe })
         // Expose profile globally so FarmerListingFormPage can embed contact info in listings
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ;(window as any).__farmnexusAuthProfile = { name, phone, district }
@@ -146,12 +151,30 @@ export const useAuthStore = create<AuthState>()(
         if (!isLocal && isSupabaseConfigured()) {
           await supabase.auth.signOut()
         }
-        set({ session: null, user: null, profile: null, isLocal: false, initialized: true })
+        set({ session: null, user: null, profile: null, isLocal: false, rememberMe: true, initialized: true })
       },
 
       init: async () => {
         // If we have a persisted local session, just mark as initialized and use it
         if (get().isLocal && get().profile) {
+          // Re-sync local profile to pick up any administrative changes/suspensions
+          const profileId = get().profile?.id
+          if (profileId && localUsersRef[profileId]) {
+            const updatedProfile = localUsersRef[profileId]
+            set({
+              profile: {
+                id: updatedProfile.id,
+                phone: updatedProfile.phone ?? null,
+                name: updatedProfile.name ?? null,
+                role: updatedProfile.role ?? null,
+                district: updatedProfile.district ?? null,
+                is_suspended: Boolean(updatedProfile.is_suspended),
+                delivery_address: updatedProfile.delivery_address ?? null,
+                location_lat: updatedProfile.location_lat ?? null,
+                location_lng: updatedProfile.location_lng ?? null,
+              }
+            })
+          }
           set({ initialized: true })
           return
         }
@@ -181,10 +204,36 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'farmnexus-auth-v1',
+      storage: createJSONStorage(() => ({
+        getItem: (name) => {
+          const local = localStorage.getItem(name)
+          if (local !== null) return local
+          return sessionStorage.getItem(name)
+        },
+        setItem: (name, value) => {
+          try {
+            const parsed = JSON.parse(value)
+            if (parsed?.state?.rememberMe) {
+              localStorage.setItem(name, value)
+              sessionStorage.removeItem(name)
+            } else {
+              sessionStorage.setItem(name, value)
+              localStorage.removeItem(name)
+            }
+          } catch (e) {
+            localStorage.setItem(name, value)
+          }
+        },
+        removeItem: (name) => {
+          localStorage.removeItem(name)
+          sessionStorage.removeItem(name)
+        }
+      })),
       // Only persist what's needed to restore a local session
       partialize: (state) => ({
         profile: state.profile,
         isLocal: state.isLocal,
+        rememberMe: state.rememberMe,
         // For local sessions, persist fake session/user so the store is consistent
         session: state.isLocal ? state.session : null,
         user: state.isLocal ? state.user : null,

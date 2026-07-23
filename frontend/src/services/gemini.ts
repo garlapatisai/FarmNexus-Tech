@@ -7,6 +7,8 @@
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY as string | undefined
 const GEMINI_MODEL = 'gemini-2.5-flash'
 const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
+const EMBEDDING_MODEL = 'text-embedding-004'
+const EMBEDDING_URL = `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent`
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -42,9 +44,9 @@ export type TopCropPrediction = {
   highlight: string
 }
 
-// ── Core fetch helper ─────────────────────────────────────────────────────────
+// ── Core fetch helper (exported for RAG engine) ───────────────────────────────
 
-async function callGemini(
+export async function callGemini(
   contents: GeminiMessage[],
   systemInstruction?: string,
 ): Promise<string> {
@@ -77,6 +79,60 @@ async function callGemini(
   const text: string =
     data?.candidates?.[0]?.content?.parts?.[0]?.text ?? ''
   return text.trim()
+}
+
+// ── Text Embedding (for RAG vector search) ────────────────────────────────────
+
+/**
+ * Get a text embedding vector using Gemini's text-embedding-004 model.
+ * Returns a float32 array of dimension 768.
+ */
+export async function getTextEmbedding(text: string): Promise<number[]> {
+  if (!GEMINI_API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY is not set.')
+  }
+
+  const res = await fetch(`${EMBEDDING_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: `models/${EMBEDDING_MODEL}`,
+      content: { parts: [{ text }] },
+    }),
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(
+      (err as { error?: { message?: string } })?.error?.message ??
+        `Gemini Embedding API error ${res.status}`,
+    )
+  }
+
+  const data = await res.json()
+  const values: number[] = data?.embedding?.values
+  if (!Array.isArray(values) || values.length === 0) {
+    throw new Error('Empty embedding returned from Gemini API')
+  }
+  return values
+}
+
+/**
+ * Batch-embed multiple texts. Calls embedContent sequentially with
+ * a small delay to avoid rate limiting. Returns embeddings in same order.
+ */
+export async function batchGetTextEmbeddings(
+  texts: string[],
+  delayMs = 50,
+): Promise<number[][]> {
+  const results: number[][] = []
+  for (let i = 0; i < texts.length; i++) {
+    results.push(await getTextEmbedding(texts[i]))
+    if (i < texts.length - 1 && delayMs > 0) {
+      await new Promise((r) => setTimeout(r, delayMs))
+    }
+  }
+  return results
 }
 
 // ── Feature 1 — Crop Price Advisor ───────────────────────────────────────────
@@ -438,4 +494,162 @@ What's wrong with my crop and how do I fix it?`
     systemInstruction,
   )
 }
+
+// ── Feature 10 — Crop Loss Damage Assessment ──────────────────────────────────
+
+export type DamageAssessmentResult = {
+  summary: string
+  severity: 'low' | 'medium' | 'high' | 'catastrophic'
+  estimatedLossPercent: number
+  remedies: string
+  insuranceEligibility: string
+}
+
+/**
+ * Assess crop damage based on images, crop details, age, hazard cause, and description.
+ * Returns estimated loss percentage, remedies, eligibility, and assessment explanation.
+ */
+export async function assessCropDamage(
+  base64Image: string | null,
+  mimeType: string | null,
+  cropName: string,
+  ageWeeks: number,
+  cause: string,
+  areaAcres: number,
+  description: string,
+): Promise<DamageAssessmentResult> {
+  if (base64Image && !GEMINI_API_KEY) {
+    throw new Error('VITE_GEMINI_API_KEY is not set.')
+  }
+
+  const systemInstruction = `You are an expert crop insurance surveyor and agricultural loss auditor.
+Analyze the details and image (if provided) of crop damage and calculate:
+1. Severity of damage: low / medium / high / catastrophic
+2. Estimated yield/financial loss as a percentage (integer between 0 and 100)
+3. Direct recommendations or recovery remedies
+4. Assessment explanation (a detailed professional summary)
+5. Advice on insurance eligibility under typical standard crop insurance schemes (e.g., PMFBY in India).
+Always respond with ONLY valid JSON in this exact format — no markdown, no code fences:
+{
+  "summary": "<2-3 sentence overview of the damage & cause>",
+  "severity": "low", // must be exactly "low", "medium", "high", or "catastrophic"
+  "estimatedLossPercent": 45, // must be a number
+  "remedies": "<markdown list of 2-3 immediate recovery steps>",
+  "insuranceEligibility": "<detailed explanation of eligibility and claim guidance>"
+}`
+
+  let prompt = `Crop: ${cropName}
+Age: ${ageWeeks} weeks
+Damage Cause: ${cause}
+Total affected area: ${areaAcres} acres
+Farmer Description: "${description}"`
+
+  let contents: any[] = []
+  if (base64Image && mimeType) {
+    contents.push({
+      inlineData: {
+        mimeType,
+        data: base64Image,
+      },
+    })
+    prompt += `\nPlease analyze this crop damage photo alongside the provided parameters.`
+  }
+  contents.push({ text: prompt })
+
+  const raw = await callGemini(
+    [{ role: 'user', parts: contents.map((c) => (c.text ? { text: c.text } : c)) }],
+    systemInstruction,
+  )
+
+  const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
+  const parsed = JSON.parse(cleaned) as DamageAssessmentResult
+  
+  // Enforce types and constraints
+  if (
+    typeof parsed.summary !== 'string' ||
+    !['low', 'medium', 'high', 'catastrophic'].includes(parsed.severity) ||
+    typeof parsed.estimatedLossPercent !== 'number' ||
+    typeof parsed.remedies !== 'string' ||
+    typeof parsed.insuranceEligibility !== 'string'
+  ) {
+    throw new Error('Unexpected AI assessment format')
+  }
+
+  return parsed
+}
+
+// ── Feature 11 — Multilingual Voice Negotiation Agent ─────────────────────────
+
+export type VoiceNegotiationResult = {
+  understoodTranslation: string
+  analysis: string
+  suggestedResponse: string
+  suggestedSpeech: string
+  quickActions: string[]
+}
+
+/**
+ * Parses spoken negotiations in regional dialects and proposes optimal counteroffers.
+ */
+export async function negotiateVoiceOffer(
+  spokenText: string,
+  languageCode: string,
+  role: 'farmer' | 'buyer',
+  listingDetails: { name: string; quantity: number; initialPrice: number },
+  chatHistory: { sender: string; text: string }[]
+): Promise<VoiceNegotiationResult> {
+  const systemInstruction = `You are a professional agricultural trade assistant and expert negotiator for Indian farm marketplaces.
+Analyze the user's spoken audio transcript (which may be in a regional Indian language like Hindi, Telugu, Kannada, or English) and understand what they are offering or requesting.
+
+Context:
+- User Role: ${role} (You are assisting them)
+- Crop Item: ${listingDetails.name}
+- Total Quantity: ${listingDetails.quantity} kg
+- Initial Target Price: ₹${listingDetails.initialPrice}/kg
+
+Recent Conversation History:
+${chatHistory.map((m) => `${m.sender}: "${m.text}"`).join('\n')}
+
+Based on this:
+1. Translate and summarize their spoken audio input into clear English terms (e.g. "Agrees to ₹38/kg but buyer must pay loading charges").
+2. Analyze the offer: is it reasonable? (Consider standard wholesale ranges, quantity scale, and previous chat context).
+3. Draft a recommended short chat response in English that they can send to the chat room.
+4. Draft a natural spoken response (suggestedSpeech) in the native language corresponding to the language code ${languageCode} (e.g. 'hi' for Hindi, 'te' for Telugu, 'kn' for Kannada, 'en' for English) that the assistant can read back to the farmer to verify.
+5. Provide 2-3 quick action suggestion labels (e.g. "Propose ₹39/kg", "Accept Offer", "Decline Price adjustment").
+
+Always respond with ONLY valid JSON in this exact format — no markdown, no code fences:
+{
+  "understoodTranslation": "<clear English summary of what they said>",
+  "analysis": "<brief strategic analysis of the offer>",
+  "suggestedResponse": "<short recommended text reply to send>",
+  "suggestedSpeech": "<natural phonetic spoken feedback in the local dialect corresponding to language code>",
+  "quickActions": ["Action 1", "Action 2"]
+}`
+
+  const prompt = `Spoken dialect input: "${spokenText}"
+Language code: ${languageCode}
+Please generate the negotiation analysis.`
+
+  const raw = await callGemini(
+    [{ role: 'user', parts: [{ text: prompt }] }],
+    systemInstruction,
+  )
+
+  const cleaned = raw.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim()
+  const parsed = JSON.parse(cleaned) as VoiceNegotiationResult
+
+  if (
+    typeof parsed.understoodTranslation !== 'string' ||
+    typeof parsed.analysis !== 'string' ||
+    typeof parsed.suggestedResponse !== 'string' ||
+    typeof parsed.suggestedSpeech !== 'string' ||
+    !Array.isArray(parsed.quickActions)
+  ) {
+    throw new Error('Unexpected AI negotiation format')
+  }
+
+  return parsed
+}
+
+
 

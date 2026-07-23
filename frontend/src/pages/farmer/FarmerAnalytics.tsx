@@ -5,6 +5,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { localListingsRef, localOrdersRef } from '../../lib/localDb'
 import { chatWithFarmAssistant, type GeminiMessage } from '../../services/gemini'
+import { generateRAGResponse, isRAGReady, initializeKnowledgeBase } from '../../services/ragEngine'
 
 function formatINR(n: number) {
   return `₹${n.toLocaleString('en-IN')}`
@@ -41,6 +42,11 @@ export function FarmerAnalytics() {
   const [aiInsight, setAiInsight] = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiError, setAiError] = useState<string | null>(null)
+  const [aiSources, setAiSources] = useState<{ title: string; source: string; similarity: number }[]>([])
+  const [showAiSources, setShowAiSources] = useState(false)
+
+  // Initialize RAG on mount
+  useEffect(() => { void initializeKnowledgeBase().catch(() => {}) }, [])
 
   const totalRevenue = useMemo(() => monthlyData.reduce((s, m) => s + m.revenue, 0), [monthlyData])
   const totalOrders = useMemo(() => monthlyData.reduce((s, m) => s + m.orders, 0), [monthlyData])
@@ -156,10 +162,12 @@ export function FarmerAnalytics() {
     return () => { cancelled = true }
   }, [user?.id, isLocal])
 
-  // Generate AI insight
+  // Generate AI insight (RAG-powered)
   async function generateInsight() {
     setAiLoading(true)
     setAiError(null)
+    setAiSources([])
+    setShowAiSources(false)
     try {
       const cropSummary = cropData.slice(0, 3).map(c => `${c.name}: ${formatINR(c.revenue)} (${c.orders} orders)`).join('; ')
       const prompt = `Based on my farm analytics:
@@ -168,13 +176,20 @@ export function FarmerAnalytics() {
 - Top crops: ${cropSummary}
 - Average order value: ${formatINR(avgOrderValue)}
 
-Give me 2-3 short, actionable insights to grow my farm business. Focus on seasonal trends, pricing strategy, and crop diversification. Keep it under 100 words.`
+Give me 2-3 short, actionable insights to grow my farm business. Focus on seasonal trends, pricing strategy, crop diversification, and relevant government schemes. Keep it under 150 words.`
 
-      const messages: GeminiMessage[] = [{ role: 'user', parts: [{ text: prompt }] }]
-      const reply = await chatWithFarmAssistant(messages)
-      setAiInsight(reply)
+      // Try RAG pipeline first
+      if (isRAGReady()) {
+        const ragResult = await generateRAGResponse(prompt)
+        setAiInsight(ragResult.answer)
+        setAiSources(ragResult.sources.map(s => ({ title: s.title, source: s.source, similarity: s.similarity })))
+      } else {
+        const messages: GeminiMessage[] = [{ role: 'user', parts: [{ text: prompt }] }]
+        const reply = await chatWithFarmAssistant(messages)
+        setAiInsight(reply)
+      }
     } catch (e) {
-      console.warn("Gemini API error. Falling back to local insights engine:", e);
+      console.warn("RAG/Gemini API error. Falling back to local insights engine:", e);
       
       const topCropName = topCrop?.name ?? 'your crops';
       const bestMonthName = bestMonth?.month ?? 'peak months';
@@ -312,6 +327,35 @@ Give me 2-3 short, actionable insights to grow my farm business. Focus on season
           {aiInsight && (
             <div className="rounded-2xl border border-violet-100 bg-white p-6 shadow-sm">
               <p className="text-sm text-neutral-700 leading-relaxed whitespace-pre-line">{aiInsight}</p>
+              {aiSources.length > 0 && (
+                <div className="mt-4 pt-3 border-t border-violet-50">
+                  <button
+                    onClick={() => setShowAiSources(!showAiSources)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors cursor-pointer"
+                  >
+                    📚 Knowledge Sources ({aiSources.length})
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={`w-3 h-3 transition-transform ${showAiSources ? 'rotate-180' : ''}`}>
+                      <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  {showAiSources && (
+                    <div className="mt-2 space-y-1.5">
+                      {aiSources.map((src, i) => (
+                        <div key={i} className="flex items-start gap-2 px-3 py-2 rounded-xl bg-violet-50/50 border border-violet-100/50">
+                          <span className="text-xs mt-0.5">📄</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-neutral-700 truncate">{src.title}</p>
+                            <p className="text-[10px] text-neutral-400 truncate">{src.source}</p>
+                          </div>
+                          <span className="text-[10px] font-mono text-violet-500 bg-violet-100 px-1.5 py-0.5 rounded shrink-0">
+                            {(src.similarity * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

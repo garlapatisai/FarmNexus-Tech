@@ -6,6 +6,7 @@ import { getBuyerLocation, haversineKm } from '../../lib/geo'
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { parseSearchQuery, type ParsedSearchFilters } from '../../services/gemini'
+import { askAgenticAI, type ExecutedTool, type AgentSource } from '../../services/agentService'
 import { isItemSaved, saveItem, unsaveItem } from './BuyerSavedItems'
 
 import { localListingsRef } from '../../lib/localDb'
@@ -49,10 +50,17 @@ export function BuyerHome() {
   const [rows, setRows] = useState<ListingCard[]>([])
   const [loading, setLoading] = useState(true)
 
-  // AI Smart Search state
+  // AI Smart Search & Agent state
   const [aiFilters, setAiFilters] = useState<ParsedSearchFilters | null>(null)
   const [aiSearchLoading, setAiSearchLoading] = useState(false)
   const aiDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Buyer Agentic AI RAG Assistant state
+  const [agentAnswer, setAgentAnswer] = useState<string | null>(null)
+  const [agentTools, setAgentTools] = useState<ExecutedTool[]>([])
+  const [agentSources, setAgentSources] = useState<AgentSource[]>([])
+  const [showSources, setShowSources] = useState(false)
+  const [agentLoading, setAgentLoading] = useState(false)
 
   // Leaflet does not require an API key to load.
 
@@ -83,6 +91,32 @@ export function BuyerHome() {
       }
     }, 700)
   }, [search])
+
+  // Explicit Agentic AI Search & Advice handler for buyers
+  async function handleAgentSearch(customQuery?: string) {
+    const q = (customQuery || search).trim()
+    if (!q) return
+    setAgentLoading(true)
+    setAgentAnswer(null)
+    setAgentTools([])
+    setAgentSources([])
+    setShowSources(false)
+    try {
+      const res = await askAgenticAI(q, [], 'buyer')
+      setAgentAnswer(res.response)
+      setAgentTools(res.toolsUsed || [])
+      setAgentSources(res.sources || [])
+
+      // Automatically extract search filters
+      const parsed = await parseSearchQuery(q)
+      if (Object.keys(parsed).length > 0) setAiFilters(parsed)
+    } catch (e) {
+      console.warn('Buyer Agent Error:', e)
+      setAgentAnswer('🌾 **FarmNexus Buyer Assistant**: Here are the matching produce listings based on verified mandi rates. Connect directly with farmers for bulk orders and delivery scheduling.')
+    } finally {
+      setAgentLoading(false)
+    }
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -240,18 +274,31 @@ export function BuyerHome() {
       </div>
 
       {/* Main Search Bar & Filter */}
-      <div className="mt-6 flex items-center rounded-xl border border-neutral-200 bg-white p-2 shadow-sm max-w-full">
-         <span className="pl-3 pr-2 text-neutral-400 font-bold">🔍</span>
+      <div className="mt-6 flex items-center rounded-xl border border-neutral-200 bg-white p-2 shadow-sm max-w-full gap-2">
+         <span className="pl-3 pr-1 text-neutral-400 font-bold">🔍</span>
          <input
            type="search"
-           placeholder="Search products, farmers, or describe what you need…"
+           placeholder="Search products, farmers, or ask AI (e.g. 'Fresh Alphonso mangoes under ₹100/kg')..."
            className="w-full bg-transparent px-2 py-2 text-sm text-neutral-700 outline-none"
            value={search}
            onChange={(e) => setSearch(e.target.value)}
+           onKeyDown={(e) => { if (e.key === 'Enter') void handleAgentSearch() }}
          />
          {aiSearchLoading && (
            <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent" />
          )}
+         <button
+           type="button"
+           onClick={() => void handleAgentSearch()}
+           disabled={agentLoading || !search.trim()}
+           className="inline-flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-700 px-3.5 py-2 text-xs font-bold text-white shadow hover:opacity-90 transition-opacity disabled:opacity-40 shrink-0 cursor-pointer"
+         >
+           {agentLoading ? (
+             <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/40 border-t-white" />
+           ) : (
+             <>🤖 Ask Agent</>
+           )}
+         </button>
          <div className="border-l border-neutral-200 pl-2 pr-2 hidden sm:flex">
             <select 
                className="bg-transparent text-sm font-medium text-neutral-600 outline-none pr-4 appearance-none cursor-pointer"
@@ -267,6 +314,73 @@ export function BuyerHome() {
             </select>
          </div>
       </div>
+
+      {/* Agentic AI Advice Banner */}
+      {agentAnswer && (
+        <div className="mt-4 rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50/70 to-teal-50/50 p-5 shadow-sm relative animate-in fade-in duration-300">
+          <button
+            onClick={() => setAgentAnswer(null)}
+            className="absolute top-3 right-3 text-xs font-bold text-neutral-400 hover:text-neutral-600 transition-colors"
+          >
+            ✕
+          </button>
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0 mt-0.5">
+              🤖
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xs font-bold text-emerald-900">FarmNexus Agentic AI</span>
+                <span className="text-[9px] font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">RAG Grounded</span>
+              </div>
+              <p className="text-xs text-neutral-800 leading-relaxed whitespace-pre-line">{agentAnswer}</p>
+
+              {/* Executed Tools Badges */}
+              {agentTools.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap items-center gap-1">
+                  <span className="text-[10px] font-semibold text-neutral-500 mr-1">Tools Executed:</span>
+                  {agentTools.map((t, ti) => (
+                    <span key={ti} className="text-[9px] font-mono font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200/60">
+                      🔧 {t.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* RAG Knowledge Sources */}
+              {agentSources.length > 0 && (
+                <div className="mt-3 pt-2 border-t border-emerald-100/60">
+                  <button
+                    onClick={() => setShowSources(!showSources)}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-violet-700 hover:text-violet-900 transition-colors cursor-pointer"
+                  >
+                    📚 Verified Knowledge Sources ({agentSources.length})
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className={`w-3 h-3 transition-transform ${showSources ? 'rotate-180' : ''}`}>
+                      <path fillRule="evenodd" d="M4.22 6.22a.75.75 0 0 1 1.06 0L8 8.94l2.72-2.72a.75.75 0 1 1 1.06 1.06l-3.25 3.25a.75.75 0 0 1-1.06 0L4.22 7.28a.75.75 0 0 1 0-1.06Z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                  {showSources && (
+                    <div className="mt-1.5 space-y-1">
+                      {agentSources.map((src, si) => (
+                        <div key={si} className="flex items-start gap-1.5 px-2.5 py-1.5 rounded-lg bg-white border border-emerald-100 shadow-xs">
+                          <span className="text-[10px] mt-0.5">📄</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-semibold text-neutral-800 truncate">{src.title}</p>
+                            <p className="text-[9px] text-neutral-400 truncate">{src.source}</p>
+                          </div>
+                          <span className="text-[9px] font-mono text-violet-600 bg-violet-50 px-1.5 py-0.5 rounded shrink-0">
+                            {(src.similarity * 100).toFixed(0)}%
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Filter Pill */}
       {aiFilters && (

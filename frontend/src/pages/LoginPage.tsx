@@ -336,10 +336,12 @@ export function LoginPage() {
 
     // Authenticate using the auth store's local session creator
     createLocalSession(selectedRole, { 
+      id: matchedUser.id,
       name: matchedUser.name, 
       phone: matchedUser.phone, 
       district: matchedUser.district,
-      password: correctPassword
+      password: correctPassword,
+      rememberMe: rememberMe
     })
 
     // Redirect to correct dashboard
@@ -376,10 +378,12 @@ export function LoginPage() {
     
     if (matchedUser) {
       createLocalSession(selectedRole, {
+        id: matchedUser.id,
         name: matchedUser.name,
         phone: matchedUser.phone,
         district: matchedUser.district,
-        password: defaultPass
+        password: defaultPass,
+        rememberMe: rememberMe
       })
       if (selectedRole === 'farmer') {
         navigate(from?.startsWith('/farmer') ? from : '/farmer/dashboard', { replace: true })

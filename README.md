@@ -42,7 +42,7 @@
 - **Produce Listings:** Manage crop category, pricing, available quantities, geographic location, and photos.
 - **Dynamic Analytics:** Visualize overall revenue, monthly trends, and product distribution charts.
 - **Regional Demand Forecasting:** Fetch state-wise crop demand predictions.
-- **Interactive Farm Assistant:** Consult a customized AI assistant for storage, crop protection, and cultivation tips.
+- **RAG-Powered AI Farm Assistant:** Consult a grounded agricultural knowledge assistant. Queries are embedded via vector search against a curated Indian agriculture knowledge base (~55 topics including PM-KISAN, crop cultivation, soil health, drip irrigation, and pest management) to provide verified answers with expandable source citations.
 
 ### 🛍️ Buyer Platform
 - **Visual Map Search:** Look up listings by distance and proximity on an interactive map.
@@ -59,14 +59,109 @@ The platform is built on a modern, modular architecture:
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, Zustand, Leaflet maps, and Recharts.
 - **Backend:** Node.js, Express, and the Razorpay Node SDK.
 - **Database & Realtime Services:** Supabase (PostgreSQL), utilizing Row-Level Security (RLS) and real-time database subscription channels for messaging.
-- **Artificial Intelligence:** Google Gemini AI integration (specifically using the `gemini-2.5-flash` model REST API).
+- **Artificial Intelligence & RAG:** 
+  - **Generation:** Google Gemini AI integration (`gemini-2.5-flash` model REST API).
+  - **RAG Vector Search:** Client-side vector embedding pipeline (`text-embedding-004` / local TF-IDF fallback vectorizer) with in-memory cosine similarity search over curated Indian agricultural knowledge bases, featuring source citations and `localStorage` vector caching.
 
 ---
 
-## 🚀 How to Run
+## 📁 Repository Structure
 
-To run the application locally, run the following command in the project root directory:
+```text
+├── backend/               # Express server for Razorpay payments & Agentic AI orchestrator
+│   ├── src/
+│   │   ├── server.js      # Main Express API entrypoint & agent route (/api/ai/agent)
+│   │   └── services/      # Agent tool definitions (agent.js)
+│   └── .env.example       # Backend environment variables template
+├── frontend/              # React + Vite application (styled with Tailwind CSS)
+│   ├── src/
+│   │   ├── components/    # Reusable UI components
+│   │   ├── pages/         # Farmer Dashboard, Buyer Home, Analytics, etc.
+│   │   └── services/      # RAG engine (ragEngine.ts), knowledgeBase.ts, agentService.ts
+│   └── .env.example       # Frontend environment variables template
+├── supabase/
+│   └── policies.sql       # RLS policies and bucket setups
+├── supabase-schema.sql    # Database schema tables and enums
+├── package.json           # Root package defining workspaces & scripts
+└── README.md              # Main project documentation
+```
 
+---
+
+## 🚀 Setup & Local Running Instructions
+
+Follow these steps to set up the project locally:
+
+### 1. Prerequisites
+Ensure you have **Node.js** (v18+) and **npm** installed.
+
+### 2. Environment Variables Configuration
+Configure environment variables for both the frontend and backend:
+
+#### Frontend (`frontend/.env`)
+Create a file named `.env` in the `frontend` folder based on `frontend/.env.example`:
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_RAZORPAY_KEY_ID=rzp_test_xxxx
+VITE_GEMINI_API_KEY=your-gemini-api-key
+```
+
+#### Backend (`backend/.env`)
+Create a file named `.env` in the `backend` folder based on `backend/.env.example`:
+```env
+PORT=3001
+CLIENT_ORIGIN=http://localhost:5173
+RAZORPAY_KEY_ID=rzp_test_xxxx
+RAZORPAY_KEY_SECRET=your_key_secret
+```
+
+### 3. Database Setup (Supabase)
+1. Set up a new project on [Supabase](https://supabase.com/).
+2. Open the **SQL Editor** in the Supabase Dashboard.
+3. Paste and run the contents of `supabase-schema.sql` to create tables, custom types, and profiles.
+4. Paste and run the contents of `supabase/policies.sql` to set up Row-Level Security (RLS) policies and storage buckets.
+5. In **Database** -> **Replication**, enable replication for the `messages` (and optionally `orders`) table so that the real-time order chat functions properly.
+
+### 4. Install Dependencies
+Run the following command in the **root** directory of the project to install all root workspace dependencies (including `concurrently`):
+```bash
+npm install
+```
+
+### 5. Run the Application
+Start both the Vite frontend server and Express backend concurrently:
 ```bash
 npm run dev
 ```
+The frontend will start on [http://localhost:5173](http://localhost:5173) and the backend on [http://localhost:3001](http://localhost:3001).
+
+---
+
+### 🌐 Vercel Production Deployment
+The frontend is pre-configured for Vercel deployment. 
+
+1. **Deploying the Frontend:**
+   Inside the `/frontend` directory, run the following Vercel command to deploy to production:
+   ```bash
+   npx vercel deploy --prod --yes
+   ```
+2. **Environment Variables in Vercel:**
+   Ensure you add the following Environment Variables in your Vercel Project Dashboard:
+   - `VITE_SUPABASE_URL`
+   - `VITE_SUPABASE_ANON_KEY`
+   - `VITE_RAZORPAY_KEY_ID`
+   - `VITE_GEMINI_API_KEY`
+
+---
+
+### 💡 Important Notes on Authentication & Session Storage
+
+1. **Local Fallback Mode:**
+   - If Supabase environment variables are missing, placeholder values, or unconfigured, the application automatically enters **Local Mode**.
+   - It will fall back to using a client-side proxy database (`frontend/src/lib/localDb.ts`) that persists in your browser storage. This allows you to test the entire application (Farmer listings, Buyer checkout, Escrow, AI search, and chat features) offline/locally without setting up any cloud databases.
+2. **"Remember Me" Toggle:**
+   - Checking **Remember me** on the login screen causes the local session state to be stored in `localStorage`, maintaining access indefinitely (across reloads and tab closures).
+   - Unchecking **Remember me** stores the session state in `sessionStorage`. Closing the browser tab/session will safely log the user out.
+3. **User Profile Sync:**
+   - Whenever the application initializes, local sessions automatically sync their profile state with `localUsersRef` in browser memory to immediately pick up any administrative modifications (such as suspensions).

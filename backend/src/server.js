@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import cors from 'cors'
 import express from 'express'
 import Razorpay from 'razorpay'
+import { runAgentOrchestrator } from './services/agent.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -33,9 +34,24 @@ app.get('/api/health', (_req, res) => {
 
 app.get('/api/info', (_req, res) => {
   res.json({
-    message: 'FarmNexus Tech API — Razorpay order + verify; Supabase from the frontend.',
+    message: 'FarmNexus Tech API — Razorpay + Agentic AI Orchestrator',
     razorpay: Boolean(rzp),
+    agenticAI: true,
   })
+})
+
+app.post('/api/ai/agent', async (req, res) => {
+  const { message, history, role } = req.body ?? {}
+  if (!message || typeof message !== 'string') {
+    return res.status(400).json({ error: 'message string is required' })
+  }
+  try {
+    const result = await runAgentOrchestrator({ message, history, role })
+    return res.json(result)
+  } catch (e) {
+    console.error('Agent Orchestrator error:', e)
+    return res.status(500).json({ error: e instanceof Error ? e.message : 'Agent error' })
+  }
 })
 
 app.post('/api/payments/create-order', async (req, res) => {
