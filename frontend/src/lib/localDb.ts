@@ -44,7 +44,7 @@ function createLocalProxy<T extends object>(key: string, initial: T): T {
 const defaultUsers = {
   'x': { id: 'x', name: 'Meena Krishnan', phone: '9876543210', password: 'password123', role: 'farmer', district: 'Idukki, Kerala', is_suspended: false, created_at: new Date().toISOString() },
   'local-demo-buyer': { id: 'local-demo-buyer', name: 'Demo Buyer', phone: '8765432109', password: 'password123', role: 'buyer', district: 'Anantapur, AP', is_suspended: false, created_at: new Date().toISOString() },
-  'local-demo-admin': { id: 'local-demo-admin', name: 'Demo Admin', phone: '9381428026', password: 'sai@123123', role: 'admin', district: 'Anantapur, AP', is_suspended: false, created_at: new Date().toISOString() },
+  'local-demo-admin': { id: 'local-demo-admin', name: 'Demo Admin', phone: '9392819533', password: 'sai@123123', role: 'admin', district: 'Anantapur, AP', is_suspended: false, created_at: new Date().toISOString() },
   'local-demo-farmer-ramesh': { id: 'local-demo-farmer-ramesh', name: 'Ramesh Yadav', phone: '9876543211', password: 'password123', role: 'farmer', district: 'Indore, Madhya Pradesh', is_suspended: false, created_at: new Date().toISOString() },
   'local-demo-farmer-anil': { id: 'local-demo-farmer-anil', name: 'Anil Patil', phone: '9876543212', password: 'password123', role: 'farmer', district: 'Ratnagiri, Maharashtra', is_suspended: false, created_at: new Date().toISOString() },
   'local-demo-farmer-sonia': { id: 'local-demo-farmer-sonia', name: 'Sonia Farms', phone: '9876543213', password: 'password123', role: 'farmer', district: 'Nashik, Maharashtra', is_suspended: false, created_at: new Date().toISOString() }

@@ -301,7 +301,7 @@ export function LoginPage() {
       setUsername('8765432109')
       setPassword('password123')
     } else if (selectedRole === 'admin') {
-      setUsername('9381428026')
+      setUsername('9392819533')
       setPassword('sai@123123')
     }
   }
@@ -347,7 +347,7 @@ export function LoginPage() {
     setSocialLoading(true)
 
     setTimeout(() => {
-      const defaultPhone = selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9381428026'
+      const defaultPhone = selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9392819533'
       const defaultPass = selectedRole === 'admin' ? 'sai@123123' : 'password123'
       const matchedUser = Object.values(localUsersRef).find((u: any) => u.phone === defaultPhone && u.role === selectedRole)
 
@@ -769,7 +769,7 @@ export function LoginPage() {
                   ⚡ Auto-fill Demo Credentials
                 </button>
                 <br />
-                Demo Credentials: <strong>{selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9381428026'}</strong> / <strong>{selectedRole === 'admin' ? 'sai@123123' : 'password123'}</strong>
+                Demo Credentials: <strong>{selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9392819533'}</strong> / <strong>{selectedRole === 'admin' ? 'sai@123123' : 'password123'}</strong>
               </div>
             </form>
           </div>
