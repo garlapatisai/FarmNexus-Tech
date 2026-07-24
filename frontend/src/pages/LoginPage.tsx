@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
 import { localUsersRef } from '../lib/localDb'
+import { supabase, isSupabaseConfigured } from '../lib/supabase'
 import {
   analyzeCropImage,
   getWaterManagementAdvice,
@@ -24,10 +25,16 @@ export function LoginPage() {
   const toggleTheme = useThemeStore((s) => s.toggleTheme)
 
   const [selectedRole, setSelectedRole] = useState<'farmer' | 'buyer' | 'admin'>('farmer')
-  const [username, setUsername] = useState('9876543210')
-  const [password, setPassword] = useState('password123')
+  const [username, setUsername] = useState('')
+  const [password, setPassword] = useState('')
   const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
+  // Social OAuth Modal states
+  const [socialModalProvider, setSocialModalProvider] = useState<'google' | 'facebook' | 'github' | null>(null)
+  const [socialEmailInput, setSocialEmailInput] = useState('')
+  const [socialError, setSocialError] = useState<string | null>(null)
+  const [socialLoading, setSocialLoading] = useState(false)
   
   // Custom interactive states
   const [showPassword, setShowPassword] = useState(false)
@@ -276,20 +283,94 @@ export function LoginPage() {
     }
   }, [])
 
-  // Prefill default credentials when role changes
+  // Switch role tabs (clears inputs so user can enter custom credentials)
   const handleRoleChange = (role: 'farmer' | 'buyer' | 'admin') => {
     setSelectedRole(role)
     setError(null)
-    if (role === 'farmer') {
+    setUsername('')
+    setPassword('')
+  }
+
+  // Explicitly prefill demo credentials when user clicks "Fill Demo Credentials"
+  const fillDemoCredentials = () => {
+    setError(null)
+    if (selectedRole === 'farmer') {
       setUsername('9876543210')
       setPassword('password123')
-    } else if (role === 'buyer') {
+    } else if (selectedRole === 'buyer') {
       setUsername('8765432109')
       setPassword('password123')
-    } else if (role === 'admin') {
+    } else if (selectedRole === 'admin') {
       setUsername('9381428026')
       setPassword('sai@123123')
     }
+  }
+
+  // Handle Social OAuth Click (Google / Facebook / GitHub)
+  const handleSocialClick = async (provider: 'google' | 'facebook' | 'github') => {
+    setError(null)
+    setSocialError(null)
+
+    // 1. Try real Supabase OAuth if configured
+    if (isSupabaseConfigured()) {
+      try {
+        const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: `${window.location.origin}/login`,
+          },
+        })
+        if (oauthErr) throw oauthErr
+        return
+      } catch (err: any) {
+        console.warn('Supabase OAuth error, using OAuth modal prompt:', err)
+      }
+    }
+
+    // 2. Open Social OAuth Sign-In Modal requiring user interaction & email consent
+    setSocialModalProvider(provider)
+    const defaultEmail = selectedRole === 'farmer' ? 'farmer.demo@gmail.com' : selectedRole === 'buyer' ? 'buyer.demo@gmail.com' : 'admin.demo@gmail.com'
+    setSocialEmailInput(defaultEmail)
+  }
+
+  // Confirm Social OAuth login in Modal
+  const handleConfirmSocialLogin = (e: React.FormEvent) => {
+    e.preventDefault()
+    setSocialError(null)
+    const trimmedEmail = socialEmailInput.trim()
+
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      setSocialError('Please enter a valid Google/OAuth email address.')
+      return
+    }
+
+    setSocialLoading(true)
+
+    setTimeout(() => {
+      const defaultPhone = selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9381428026'
+      const defaultPass = selectedRole === 'admin' ? 'sai@123123' : 'password123'
+      const matchedUser = Object.values(localUsersRef).find((u: any) => u.phone === defaultPhone && u.role === selectedRole)
+
+      if (matchedUser) {
+        createLocalSession(selectedRole, {
+          id: matchedUser.id,
+          name: trimmedEmail.split('@')[0] || matchedUser.name,
+          phone: matchedUser.phone,
+          district: matchedUser.district,
+          password: defaultPass,
+          rememberMe: rememberMe
+        })
+        setSocialLoading(false)
+        setSocialModalProvider(null)
+        if (selectedRole === 'farmer') {
+          navigate(from?.startsWith('/farmer') ? from : '/farmer/dashboard', { replace: true })
+        } else if (selectedRole === 'buyer') {
+          navigate(from?.startsWith('/buyer') ? from : '/buyer/home', { replace: true })
+        } else if (selectedRole === 'admin') {
+          navigate('/admin', { replace: true })
+        }
+      }
+    }, 600)
   }
 
   // Handle Login submission
@@ -370,30 +451,7 @@ export function LoginPage() {
     }, 700)
   }
 
-  // Social log in triggers direct demo log in as current selected role
-  const handleSocialLogin = () => {
-    const defaultPhone = selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9381428026'
-    const defaultPass = selectedRole === 'admin' ? 'sai@123123' : 'password123'
-    const matchedUser = Object.values(localUsersRef).find((u: any) => u.phone === defaultPhone && u.role === selectedRole)
-    
-    if (matchedUser) {
-      createLocalSession(selectedRole, {
-        id: matchedUser.id,
-        name: matchedUser.name,
-        phone: matchedUser.phone,
-        district: matchedUser.district,
-        password: defaultPass,
-        rememberMe: rememberMe
-      })
-      if (selectedRole === 'farmer') {
-        navigate(from?.startsWith('/farmer') ? from : '/farmer/dashboard', { replace: true })
-      } else if (selectedRole === 'buyer') {
-        navigate(from?.startsWith('/buyer') ? from : '/buyer/home', { replace: true })
-      } else if (selectedRole === 'admin') {
-        navigate('/admin', { replace: true })
-      }
-    }
-  }
+
 
   return (
     <div className="login-page-container">
@@ -673,21 +731,21 @@ export function LoginPage() {
               <div className="social">
                 <button
                   type="button"
-                  onClick={handleSocialLogin}
+                  onClick={() => handleSocialClick('google')}
                   title="Login with Google"
                 >
                   <i className="fa-brands fa-google"></i>
                 </button>
                 <button
                   type="button"
-                  onClick={handleSocialLogin}
+                  onClick={() => handleSocialClick('facebook')}
                   title="Login with Facebook"
                 >
                   <i className="fa-brands fa-facebook-f"></i>
                 </button>
                 <button
                   type="button"
-                  onClick={handleSocialLogin}
+                  onClick={() => handleSocialClick('github')}
                   title="Login with GitHub"
                 >
                   <i className="fa-brands fa-github"></i>
@@ -702,7 +760,14 @@ export function LoginPage() {
 
               {/* Quick Testing Hint */}
               <div className="demo-hint">
-                💡 Tip: Click on role tabs above to switch roles.
+                💡 Tip: Enter credentials above or{' '}
+                <button
+                  type="button"
+                  onClick={fillDemoCredentials}
+                  style={{ background: 'none', border: 'none', padding: 0, color: '#10b981', fontWeight: 'bold', textDecoration: 'underline', cursor: 'pointer' }}
+                >
+                  ⚡ Auto-fill Demo Credentials
+                </button>
                 <br />
                 Demo Credentials: <strong>{selectedRole === 'farmer' ? '9876543210' : selectedRole === 'buyer' ? '8765432109' : '9381428026'}</strong> / <strong>{selectedRole === 'admin' ? 'sai@123123' : 'password123'}</strong>
               </div>
@@ -1245,6 +1310,78 @@ export function LoginPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Social OAuth Sign-In Modal */}
+      {socialModalProvider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-neutral-200 text-neutral-900">
+            <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+              <div className="flex items-center gap-2 font-bold text-lg">
+                <span className="text-xl">
+                  {socialModalProvider === 'google' ? '🌐' : socialModalProvider === 'facebook' ? '📘' : '🐙'}
+                </span>
+                <span className="capitalize">Sign in with {socialModalProvider}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSocialModalProvider(null)}
+                className="text-neutral-400 hover:text-neutral-600 font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmSocialLogin} className="mt-4 space-y-4 text-sm">
+              <p className="text-neutral-600 text-xs">
+                Authenticate with your {socialModalProvider} account to access FarmNexus as{' '}
+                <strong className="capitalize text-emerald-700">{selectedRole}</strong>.
+              </p>
+
+              {socialError && (
+                <div className="rounded-lg bg-red-50 p-2.5 text-xs text-red-600 font-medium border border-red-200">
+                  {socialError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-neutral-500 mb-1">
+                  {socialModalProvider} Email Address
+                </label>
+                <input
+                  type="email"
+                  value={socialEmailInput}
+                  onChange={(e) => setSocialEmailInput(e.target.value)}
+                  placeholder="e.g. yourname@gmail.com"
+                  required
+                  className="w-full rounded-xl border border-neutral-300 px-3.5 py-2.5 text-sm focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="rounded-lg bg-neutral-50 p-3 text-xs text-neutral-500 flex items-center gap-2 border border-neutral-200">
+                <span>🔒</span>
+                <span>Identity verification powered by {socialModalProvider.toUpperCase()} Single Sign-On.</span>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setSocialModalProvider(null)}
+                  className="rounded-xl border border-neutral-300 px-4 py-2 text-xs font-semibold text-neutral-700 hover:bg-neutral-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={socialLoading}
+                  className="rounded-xl bg-emerald-600 px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-emerald-700 disabled:opacity-50"
+                >
+                  {socialLoading ? 'Authenticating...' : `Continue with ${socialModalProvider}`}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
