@@ -231,7 +231,7 @@ export function FarmerDashboard() {
             .filter((m) => m.role !== 'model' || updatedMsgs.indexOf(m) > 0)
             .map((m) => ({ role: m.role, parts: [{ text: m.text }] }))
           const reply = await chatWithFarmAssistant(geminiHistory)
-          setChatMessages((prev) => [...prev, { role: 'model', text: reply }])
+          setChatMessages((prev) => [...prev, { role: 'model', text: reply.answer, sources: reply.sources }])
         }
       } catch (e) {
         console.warn('Fallback chat responder error:', e)

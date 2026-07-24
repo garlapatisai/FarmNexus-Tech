@@ -4,6 +4,8 @@ import cors from 'cors'
 import express from 'express'
 import Razorpay from 'razorpay'
 import { runAgentOrchestrator } from './services/agent.js'
+import { generateContent, embedContent } from './services/geminiService.js'
+import { getAIMetrics } from './services/aiLogger.js'
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3001
@@ -38,6 +40,40 @@ app.get('/api/info', (_req, res) => {
     razorpay: Boolean(rzp),
     agenticAI: true,
   })
+})
+
+app.get('/api/ai/metrics', (_req, res) => {
+  return res.json(getAIMetrics())
+})
+
+app.post('/api/ai/generate', async (req, res) => {
+  const { contents, systemInstruction, model } = req.body ?? {}
+  if (!contents || !Array.isArray(contents)) {
+    return res.status(400).json({ error: 'contents array is required' })
+  }
+  try {
+    const result = await generateContent({ contents, systemInstruction, model })
+    return res.json(result)
+  } catch (e) {
+    console.error('API /api/ai/generate error:', e)
+    const status = e.status || 500
+    return res.status(status).json({ error: e instanceof Error ? e.message : 'Gemini generate content error' })
+  }
+})
+
+app.post('/api/ai/embed', async (req, res) => {
+  const { text, model } = req.body ?? {}
+  if (!text || typeof text !== 'string') {
+    return res.status(400).json({ error: 'text string is required' })
+  }
+  try {
+    const result = await embedContent({ text, model })
+    return res.json(result)
+  } catch (e) {
+    console.error('API /api/ai/embed error:', e)
+    const status = e.status || 500
+    return res.status(status).json({ error: e instanceof Error ? e.message : 'Gemini embedding error' })
+  }
 })
 
 app.post('/api/ai/agent', async (req, res) => {

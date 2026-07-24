@@ -4,7 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { supabase, isSupabaseConfigured } from '../../lib/supabase'
 import { useAuthStore } from '../../store/authStore'
 import { localListingsRef, localOrdersRef } from '../../lib/localDb'
-import { chatWithFarmAssistant, type GeminiMessage } from '../../services/gemini'
+import { chatWithFarmAssistant } from '../../services/gemini'
 import { generateRAGResponse, isRAGReady, initializeKnowledgeBase, retrieveRelevantChunks } from '../../services/ragEngine'
 
 function formatINR(n: number) {
@@ -200,9 +200,12 @@ Give 3 short, actionable insights to grow my farm business. Focus on seasonal tr
           setAiSources(ragResult.sources.map(s => ({ title: s.title, source: s.source, similarity: s.similarity })))
         }
       } else {
-        const messages: GeminiMessage[] = [{ role: 'user', parts: [{ text: prompt }] }]
+        const messages = [{ role: 'user' as const, parts: [{ text: prompt }] }]
         const reply = await chatWithFarmAssistant(messages)
-        setAiInsight(reply)
+        setAiInsight(reply.answer)
+        if (reply.sources && reply.sources.length > 0) {
+          setAiSources(reply.sources)
+        }
       }
     } catch (e) {
       console.warn("Gemini API error. Generating grounded RAG insights locally:", e);

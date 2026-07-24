@@ -14,6 +14,9 @@
 
 import 'dotenv/config'
 import { KNOWLEDGE_BASE } from './knowledgeBase.js'
+import { validateInputGuardrails, validateOutputGuardrails } from './guardrails.js'
+import { logAIExecution } from './aiLogger.js'
+import { performVectorSearch } from './vectorSearch.js'
 
 // ── Dynamic RAG Knowledge Search Engine ───────────────────────────────────────
 
@@ -152,7 +155,7 @@ async function executeTool(name, args) {
   switch (name) {
     case 'search_agricultural_knowledge': {
       const q = String(args?.query || '')
-      const searchResults = searchKnowledgeBase(q, 3)
+      const searchResults = await performVectorSearch(q, 3)
       const topMatch = searchResults[0]
 
       return {
@@ -240,10 +243,37 @@ async function executeTool(name, args) {
 
 // ── Agentic ReAct Orchestrator ────────────────────────────────────────────────
 
-export async function runAgentOrchestrator({ message, history = [], role = 'farmer' }) {
-  const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY
+export async function runAgentOrchestrator({ message, history = [], role = 'farmer', userId = 'user-1' }) {
+  const startTime = performance.now()
+  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
   const toolsUsed = []
   const sources = []
+
+  // 1. Input Guardrails Check
+  const inputCheck = validateInputGuardrails(message)
+  if (!inputCheck.passed) {
+    const latencyMs = Math.round(performance.now() - startTime)
+    logAIExecution({
+      prompt: message,
+      role,
+      userId,
+      latencyMs,
+      toolsUsed: [],
+      sourcesRetrieved: [],
+      guardrailTriggered: true,
+      guardrailReason: inputCheck.reason,
+      status: 'flagged',
+      responseSnippet: 'Input request blocked by FarmNexus AI Guardrails.',
+    })
+
+    return {
+      response: `🛡️ **FarmNexus AI Safety System**: ${inputCheck.reason}`,
+      toolsUsed: [],
+      sources: [],
+      guardrailFlagged: true,
+      timestamp: new Date().toISOString(),
+    }
+  }
 
   const lowerMsg = message.toLowerCase()
 
@@ -287,13 +317,15 @@ export async function runAgentOrchestrator({ message, history = [], role = 'farm
     lowerMsg.includes('escrow') ||
     lowerMsg.includes('deliver')
 
+  // Role authorization check: analytics restricted to farmers or admins
   const needsAnalytics =
-    lowerMsg.includes('sales') ||
-    lowerMsg.includes('revenue') ||
-    lowerMsg.includes('earning') ||
-    lowerMsg.includes('analytic') ||
-    lowerMsg.includes('profit') ||
-    lowerMsg.includes('performance')
+    (role === 'farmer' || role === 'admin') &&
+    (lowerMsg.includes('sales') ||
+      lowerMsg.includes('revenue') ||
+      lowerMsg.includes('earning') ||
+      lowerMsg.includes('analytic') ||
+      lowerMsg.includes('profit') ||
+      lowerMsg.includes('performance'))
 
   // Run matching tools
   if (needsKnowledge || (!needsPrice && !needsListings && !needsOrders && !needsAnalytics)) {
@@ -335,16 +367,17 @@ export async function runAgentOrchestrator({ message, history = [], role = 'farm
   // Synthesize answer using Gemini API if key exists & valid, else dynamic fallback
   let responseText = ''
 
-  if (apiKey && apiKey.startsWith('AIza')) {
+  if (apiKey) {
     try {
       const GEMINI_MODEL = 'gemini-2.5-flash'
       const BASE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
 
-      const promptContext = `You are FarmNexus AI Agent, a helpful agentic assistant for Indian farmers.
+      const promptContext = `You are FarmNexus AI Agent, a helpful agentic assistant for Indian agriculture (${role} role context).
 You executed the following tools to answer the user's question:
 ${JSON.stringify(toolsUsed, null, 2)}
 
 User Question: "${message}"
+Conversation Memory History: ${JSON.stringify(history.slice(-4))}
 
 Synthesize a helpful, friendly, and practical answer (3-5 sentences) based on the tool results. Use emojis and ₹ for pricing.`
 
@@ -402,8 +435,27 @@ Synthesize a helpful, friendly, and practical answer (3-5 sentences) based on th
     responseText = parts.join('\n\n')
   }
 
+  // 2. Output Guardrails Check & Sanitization
+  const outputCheck = validateOutputGuardrails(responseText)
+  const finalResponseText = outputCheck.text
+
+  const latencyMs = Math.round(performance.now() - startTime)
+
+  // 3. Record Execution Log for Admin Monitoring
+  logAIExecution({
+    prompt: message,
+    role,
+    userId,
+    latencyMs,
+    toolsUsed,
+    sourcesRetrieved: sources,
+    guardrailTriggered: false,
+    status: 'success',
+    responseSnippet: finalResponseText,
+  })
+
   return {
-    response: responseText,
+    response: finalResponseText,
     toolsUsed,
     sources,
     timestamp: new Date().toISOString(),

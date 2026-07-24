@@ -23,6 +23,7 @@ import { AdminLoginPage } from './pages/admin/AdminLoginPage'
 import { AdminDashboard } from './pages/admin/AdminDashboard'
 import { AdminUsers } from './pages/admin/AdminUsers'
 import { AdminOrders } from './pages/admin/AdminOrders'
+import { AIMonitoring } from './pages/admin/AIMonitoring'
 import { useThemeStore } from './store/themeStore'
 
 function FarmerShell({ children }: { children: React.ReactNode }) {
@@ -200,6 +201,14 @@ export default function App() {
             element={
               <AdminShell>
                 <AdminOrders />
+              </AdminShell>
+            }
+          />
+          <Route
+            path="/admin/ai-monitoring"
+            element={
+              <AdminShell>
+                <AIMonitoring />
               </AdminShell>
             }
           />

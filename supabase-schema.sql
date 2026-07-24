@@ -1,3 +1,6 @@
+-- Enable pgvector extension for AI RAG vector similarity search
+create extension if not exists vector;
+
 -- FarmDirect PRD §9 — apply in Supabase SQL editor; adjust enums/policies as needed.
 
 create type public.user_role as enum ('farmer', 'buyer', 'admin');
@@ -58,12 +61,59 @@ create table public.messages (
   created_at timestamptz not null default now()
 );
 
--- Enable Realtime for messages (Dashboard → Database → Replication).
--- RLS policies: add per PRD §9 (users own profile; listings read public if active; orders/messages scoped to parties).
+-- RAG Knowledge Chunks Table with Vector Embeddings (768 dimensions for Gemini text-embedding-004)
+create table public.knowledge_chunks (
+  id uuid primary key default gen_random_uuid (),
+  topic text not null,
+  title text not null,
+  content text not null,
+  source text not null,
+  embedding vector(768),
+  created_at timestamptz not null default now()
+);
 
+-- Vector Similarity Search RPC Function
+create or replace function match_knowledge_chunks(
+  query_embedding vector(768),
+  match_threshold float default 0.15,
+  match_count int default 5
+)
+returns table (
+  id uuid,
+  topic text,
+  title text,
+  content text,
+  source text,
+  similarity float
+)
+language plpgsql
+as $$
+begin
+  return query
+  select
+    kc.id,
+    kc.topic,
+    kc.title,
+    kc.content,
+    kc.source,
+    1 - (kc.embedding <=> query_embedding) as similarity
+  from public.knowledge_chunks kc
+  where 1 - (kc.embedding <=> query_embedding) > match_threshold
+  order by kc.embedding <=> query_embedding
+  limit match_count;
+end;
+$$;
+
+-- Enable Realtime for messages (Dashboard → Database → Replication).
 alter table public.profiles enable row level security;
 alter table public.listings enable row level security;
 alter table public.orders enable row level security;
 alter table public.messages enable row level security;
+alter table public.knowledge_chunks enable row level security;
 
--- Next: run supabase/policies.sql for RLS, storage bucket, and extra columns (is_suspended, delivery_address, reject_reason).
+-- Public read policy for RAG knowledge chunks
+create policy "Allow public read access to knowledge_chunks"
+  on public.knowledge_chunks for select
+  using (true);
+
+-- Next: run supabase/policies.sql for RLS, storage bucket, and extra columns.

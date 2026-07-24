@@ -161,7 +161,7 @@ export function LoginPage() {
         role: 'user',
         parts: [{ text: `I grow ${smartFarmingForm.crop} in ${smartFarmingForm.region}, India. ${smartFarmingForm.question}` }],
       }])
-      setFeatureResult(result)
+      setFeatureResult(result.answer)
     } catch (err) {
       console.warn('Smart farming advice error:', err)
       setFeatureResult('🤖 **AI Farming Insights**:\n\n🌱 Based on your region and crop, here are my recommendations:\n\n1. **Optimal Sowing Time**: For best yields, sow during the Kharif season (June-July) with adequate pre-monsoon soil preparation.\n\n2. **Soil Preparation**: Apply Farm Yard Manure (FYM) at 10 tonnes/acre before sowing. Ensure pH is between 6.0-7.5.\n\n3. **Smart Monitoring**: Check your crops daily during flowering stage — this is when pests are most active.\n\n4. **Market Strategy**: Use FarmNexus AI price advisor to find the best selling price before listing your harvest. 📊')

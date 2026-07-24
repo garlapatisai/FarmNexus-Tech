@@ -113,6 +113,9 @@ export function AdminDashboard() {
           <Link to="/admin/orders" className="text-primary underline">
             Orders
           </Link>
+          <Link to="/admin/ai-monitoring" className="text-primary font-semibold underline flex items-center gap-1">
+            ⚡ AI Monitoring
+          </Link>
         </div>
       </div>
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
