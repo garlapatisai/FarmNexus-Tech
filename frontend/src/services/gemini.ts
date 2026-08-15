@@ -4,7 +4,7 @@
  * to keep GEMINI_API_KEY secure on the server.
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '')
 
 import { retrieveRelevantChunks } from './ragEngine'
 

@@ -5,7 +5,7 @@
 
 import 'dotenv/config'
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || 'AIzaSyDZbJCn4JDZngMdbX2WXz3-_hztLDai1QE'
 const DEFAULT_MODEL = 'gemini-2.5-flash'
 const EMBEDDING_MODEL = 'text-embedding-004'
 

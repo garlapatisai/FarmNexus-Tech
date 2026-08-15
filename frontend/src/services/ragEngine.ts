@@ -46,9 +46,12 @@ let vocabulary: string[] = []
 const wordIDFMap: Map<string, number> = new Map()
 
 function tokenize(text: string): string[] {
-  return text
+  const normalized = text
     .toLowerCase()
+    .replace(/\bkissan\b/g, 'kisan')
+    .replace(/\bpmkisan\b/g, 'pm kisan')
     .replace(/[^a-z0-9\s]/g, ' ')
+  return normalized
     .split(/\s+/)
     .filter((w) => w.length >= 2 && !['the', 'and', 'for', 'with', 'that', 'this', 'from', 'are', 'was', 'what', 'how'].includes(w))
 }

@@ -27,7 +27,7 @@ export type AIMetricsData = {
   recentLogs: AILogItem[]
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? (import.meta.env.DEV ? 'http://localhost:3001' : '')
 
 export function AIMonitoring() {
   const [metrics, setMetrics] = useState<AIMetricsData | null>(null)

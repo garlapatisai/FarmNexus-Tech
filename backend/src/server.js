@@ -13,7 +13,13 @@ const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173'
 
 app.use(
   cors({
-    origin: [CLIENT_ORIGIN, 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or same-origin)
+      if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('vercel.app')) {
+        return callback(null, true)
+      }
+      return callback(null, true)
+    },
     credentials: true,
   }),
 )
@@ -139,6 +145,10 @@ app.use((_req, res) => {
   res.status(404).json({ error: 'Not found' })
 })
 
-app.listen(PORT, () => {
-  console.log(`Backend listening on http://127.0.0.1:${PORT}`)
-})
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Backend listening on http://127.0.0.1:${PORT}`)
+  })
+}
+
+export default app
