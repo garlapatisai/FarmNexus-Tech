@@ -1,6 +1,6 @@
 # 🌾 FarmNexus Tech
 
-🚀 **Live Demo:** [https://frontend-pink-three-62.vercel.app](https://frontend-pink-three-62.vercel.app)
+🚀 **Live Demo:** [https://farmnexus-tech.vercel.app](https://farmnexus-tech.vercel.app)
 
 **FarmNexus Tech** is a peer-to-peer digital marketplace that connects Indian farmers directly with buyers. By providing real-time listing tools, secure digital escrow payments, live order-based chat, and Google Gemini AI insights, FarmNexus empowers farmers to sell their produce at fair market prices while enabling buyers to access fresh, high-quality crop yields directly from the source.
 
